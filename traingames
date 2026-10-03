@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>地鐵賓果 (Metro Bingo) - 淡水信義線全線版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;700;900&display=swap');
+        
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+
+        /* 列車段線條彩色動態套用 */
+        .segment-color-0 { border-color: #ef4444; color: #ef4444; background-color: #fef2f2; }
+        .segment-color-1 { border-color: #3b82f6; color: #3b82f6; background-color: #eff6ff; }
+        .segment-color-2 { border-color: #10b981; color: #10b981; background-color: #ecfdf5; }
+        .segment-color-3 { border-color: #f59e0b; color: #f59e0b; background-color: #fffbeb; }
+        .segment-color-4 { border-color: #8b5cf6; color: #8b5cf6; background-color: #f5f3ff; }
+        .segment-color-5 { border-color: #ec4899; color: #ec4899; background-color: #fdf2f8; }
+        .segment-color-6 { border-color: #06b6d4; color: #06b6d4; background-color: #ecfeff; }
+        .segment-color-7 { border-color: #84cc16; color: #84cc16; background-color: #f7fee7; }
+
+        .badge-segment-0 { background-color: #ef4444; color: white; }
+        .badge-segment-1 { background-color: #3b82f6; color: white; }
+        .badge-segment-2 { background-color: #10b981; color: white; }
+        .badge-segment-3 { background-color: #f59e0b; color: white; }
+        .badge-segment-4 { background-color: #8b5cf6; color: white; }
+        .badge-segment-5 { background-color: #ec4899; color: white; }
+        .badge-segment-6 { background-color: #06b6d4; color: white; }
+        .badge-segment-7 { background-color: #84cc16; color: white; }
+
+        .station-pulse {
+            animation: pulse-ring 1.5s infinite;
+        }
+
+        @keyframes pulse-ring {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7); }
+            50% { box-shadow: 0 0 0 8px rgba(56, 189, 248, 0); }
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-12">
+
+    <!-- Header / Navbar -->
+    <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-50 shadow-md">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="bg-rose-600 text-white p-2 rounded-lg font-bold text-xl flex items-center justify-center shadow-lg shadow-rose-600/30">
+                    <i class="fa-solid fa-train-subway"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-black tracking-wider text-rose-500">地鐵賓果 METRO BINGO</h1>
+                    <p class="text-xs text-slate-400">台北捷運 淡水信義線 (27 站全線版)</p>
+                </div>
+            </div>
+            <button id="reset-btn" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition active:scale-95">
+                <i class="fa-solid fa-rotate-right"></i> 重新開始
+            </button>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Left Controls Area -->
+        <section class="lg:col-span-1 space-y-6">
+            
+            <!-- Card Draw Ticket Station -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl text-center flex flex-col items-center">
+                <h2 class="text-xs font-bold text-slate-400 tracking-wider uppercase mb-3 flex items-center gap-2">
+                    <i class="fa-solid fa-ticket text-rose-500"></i> 自動發牌感應卡槽
+                </h2>
+                
+                <!-- Ticket/Card Display -->
+                <div id="card-display" class="w-36 h-48 my-2 rounded-2xl border-4 border-slate-700 bg-slate-800 flex flex-col items-center justify-center relative shadow-inner transition-all duration-300">
+                    <span id="card-label" class="text-slate-400 text-sm font-bold">點擊抽牌</span>
+                    <span id="card-number" class="text-6xl font-black text-rose-400 hidden">--</span>
+                    <div id="card-sub-icon" class="absolute bottom-3 text-slate-600 hidden">
+                        <i class="fa-solid fa-subway"></i>
+                    </div>
+                </div>
+
+                <div class="mt-2 text-xs text-slate-400 flex justify-between w-full px-4 mb-4">
+                    <span>剩餘牌卡：<strong id="deck-count" class="text-slate-200 text-sm">39</strong> 張</span>
+                    <span>已完成車站：<strong id="turn-count" class="text-rose-400 text-sm">0</strong>/27</span>
+                </div>
+
+                <button id="draw-btn" class="w-full bg-gradient-to-r from-rose-600 to-red-500 hover:from-rose-500 hover:to-red-400 text-white font-black text-lg py-3 rounded-xl shadow-lg shadow-rose-600/25 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                    <i class="fa-solid fa-hand-pointer mr-1"></i> 抽取號碼牌
+                </button>
+                <p id="action-hint" class="text-xs text-amber-400 mt-3 font-medium h-4"></p>
+            </div>
+
+            <!-- Remaining Deck Tracker -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="text-xs font-bold text-slate-400 tracking-wider uppercase flex items-center gap-2">
+                        <i class="fa-solid fa-layer-group text-slate-400"></i> 牌池剩餘牌卡監控 (1~30)
+                    </h3>
+                </div>
+                <div id="deck-tracker" class="grid grid-cols-6 gap-1.5 text-center">
+                    <!-- JS Injected Stats -->
+                </div>
+            </div>
+
+            <!-- Score Table Reference -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl">
+                <h3 class="text-xs font-bold text-slate-400 tracking-wider uppercase mb-3 flex items-center gap-2">
+                    <i class="fa-solid fa-table-list"></i> 列車長度分數對照表
+                </h3>
+                <div class="grid grid-cols-5 gap-1.5 text-center text-xs max-h-36 overflow-y-auto pr-1">
+                    <div class="bg-slate-800/60 p-1 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">長度1</span><span class="font-bold text-slate-200 text-xs">+0</span></div>
+                    <div class="bg-slate-800/60 p-1 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">長度2</span><span class="font-bold text-slate-200 text-xs">+3</span></div>
+                    <div class="bg-slate-800/60 p-1 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">長度3</span><span class="font-bold text-slate-200 text-xs">+8</span></div>
+                    <div class="bg-slate-800/60 p-1 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">長度4</span><span class="font-bold text-slate-200 text-xs">+15</span></div>
+                    <div class="bg-slate-800/60 p-1 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">長度5</span><span class="font-bold text-slate-200 text-xs">+25</span></div>
+                    <div class="bg-slate-800/60 p-1 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">長度6</span><span class="font-bold text-slate-200 text-xs">+35</span></div>
+                    <div class="bg-slate-800/60 p-1 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">長度7</span><span class="font-bold text-slate-200 text-xs">+50</span></div>
+                    <div class="bg-slate-800/60 p-1 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">長度8</span><span class="font-bold text-slate-200 text-xs">+65</span></div>
+                    <div class="bg-slate-800/60 p-1 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">長度9</span><span class="font-bold text-slate-200 text-xs">+80</span></div>
+                    <div class="bg-slate-800/60 p-1 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">長度10</span><span class="font-bold text-slate-200 text-xs">+100</span></div>
+                    <div class="bg-slate-800/60 p-1 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">長度15</span><span class="font-bold text-slate-200 text-xs">+220</span></div>
+                    <div class="bg-slate-800/60 p-1 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">長度20</span><span class="font-bold text-slate-200 text-xs">+400</span></div>
+                    <div class="bg-slate-800/60 p-1 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">長度27</span><span class="font-bold text-slate-200 text-xs">+600</span></div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Right Metro Map Main Area -->
+        <section class="lg:col-span-2 space-y-6">
+            
+            <!-- Tamsui-Xinyi Metro Map Layout Board -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+                <div class="flex flex-wrap justify-between items-center gap-2 mb-6 border-b border-slate-800 pb-4">
+                    <div>
+                        <h2 class="text-lg font-black text-rose-500 flex items-center gap-2">
+                            <i class="fa-solid fa-map-location-dot"></i> 淡水信義線 (Tamsui-Xinyi Line)
+                        </h2>
+                        <p class="text-xs text-slate-400">極簡捷運路線圖，包含 R28 淡水 至 R02 象山 全線 27 站</p>
+                    </div>
+                    <div class="text-xs bg-slate-800 text-slate-300 px-3 py-1.5 rounded-full border border-slate-700 font-medium">
+                        規則：數字大於等於上一站延伸列車段，變小另起一段
+                    </div>
+                </div>
+
+                <!-- Metro Map Snake Path Layout Container -->
+                <div class="relative py-4 px-2">
+                    <!-- Station Nodes Canvas/Grid Layout -->
+                    <div id="metro-map-container" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-y-8 gap-x-4 relative z-10">
+                        <!-- JS Dynamic Injected Station Nodes -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dynamic Segment Scoring Dashboard -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl">
+                <div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-800">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-300">淡水信義線 列車段結算</h3>
+                        <p class="text-xs text-slate-500">自動分析全線各段長度與累計得分</p>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs text-slate-400 block">當前路線總分</span>
+                        <span id="total-score" class="text-3xl font-black text-amber-400">0 <span class="text-sm font-normal text-slate-400">分</span></span>
+                    </div>
+                </div>
+
+                <div id="segments-list" class="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    <p class="text-center text-slate-500 text-xs py-4">填入數字後將即時計算列車長度得分</p>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <script>
+        // Full Tamsui-Xinyi Line Station List (R28 -> R02, Total 27 stations)
+        const STATIONS = [
+            "淡水", "紅樹林", "竹圍", "關渡", "忠義", "復興崗", 
+            "北投", "奇岩", "唭哩岸", "石牌", "明德", "芝山", 
+            "士林", "劍潭", "圓山", "民權西路", "雙連", "中山", 
+            "台北車站", "台大醫院", "中正紀念堂", "東門", "大安森林公園", "大安", 
+            "信義安和", "台北101/世貿", "象山"
+        ];
+
+        // Score Table Extended up to 27
+        const SCORE_TABLE = {
+            0: 0, 1: 0, 2: 3, 3: 8, 4: 15, 5: 25,
+            6: 35, 7: 50, 8: 65, 9: 80, 10: 100,
+            11: 120, 12: 140, 13: 165, 14: 190, 15: 220,
+            16: 250, 17: 280, 18: 310, 19: 350, 20: 400,
+            21: 430, 22: 460, 23: 490, 24: 520, 25: 550, 26: 580, 27: 600
+        };
+
+        // Game State
+        let deck = [];
+        let fullDeckReference = [];
+        let currentCard = null;
+        let board = Array(STATIONS.length).fill(null);
+        let filledCount = 0;
+        let isWaitingForPlace = false;
+
+        // DOM Elements
+        const drawBtn = document.getElementById('draw-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const cardDisplay = document.getElementById('card-display');
+        const cardNumber = document.getElementById('card-number');
+        const cardLabel = document.getElementById('card-label');
+        const cardSubIcon = document.getElementById('card-sub-icon');
+        const deckCountEl = document.getElementById('deck-count');
+        const turnCountEl = document.getElementById('turn-count');
+        const metroMapContainer = document.getElementById('metro-map-container');
+        const totalScoreEl = document.getElementById('total-score');
+        const segmentsListEl = document.getElementById('segments-list');
+        const actionHintEl = document.getElementById('action-hint');
+        const deckTrackerEl = document.getElementById('deck-tracker');
+
+        // Build Basic Deck: 1~10 (1 each), 11~19 (2 each), 20~30 (1 each) -> 39 cards total
+        function buildDeck() {
+            const cards = [];
+            for (let i = 1; i <= 10; i++) cards.push(i);
+            for (let i = 11; i <= 19; i++) { cards.push(i); cards.push(i); }
+            for (let i = 20; i <= 30; i++) cards.push(i);
+            return cards;
+        }
+
+        // Fisher-Yates Shuffle
+        function shuffle(array) {
+            const arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        function initGame() {
+            fullDeckReference = buildDeck();
+            deck = shuffle(fullDeckReference);
+            currentCard = null;
+            board = Array(STATIONS.length).fill(null);
+            filledCount = 0;
+            isWaitingForPlace = false;
+
+            // UI Reset
+            cardLabel.innerText = "點擊抽牌";
+            cardLabel.classList.remove('hidden');
+            cardNumber.innerText = "--";
+            cardNumber.classList.add('hidden');
+            cardSubIcon.classList.add('hidden');
+            cardDisplay.className = "w-36 h-48 my-2 rounded-2xl border-4 border-slate-700 bg-slate-800 flex flex-col items-center justify-center relative shadow-inner transition-all duration-300";
+            
+            drawBtn.disabled = false;
+            drawBtn.innerHTML = `<i class="fa-solid fa-hand-pointer mr-1"></i> 抽取號碼牌`;
+            actionHintEl.innerText = "";
+
+            renderDeckTracker();
+            updateStats();
+            renderMetroMap();
+            evaluateBoard();
+        }
+
+        function renderDeckTracker() {
+            deckTrackerEl.innerHTML = '';
+            // Count remaining for numbers 1~30
+            const counts = {};
+            for (let i = 1; i <= 30; i++) counts[i] = 0;
+            deck.forEach(num => { counts[num] = (counts[num] || 0) + 1; });
+
+            for (let i = 1; i <= 30; i++) {
+                const remain = counts[i];
+                const item = document.createElement('div');
+                
+                let bgClass = "bg-slate-800/80 border-slate-700 text-slate-400";
+                if (remain === 2) bgClass = "bg-emerald-950/60 border-emerald-600/60 text-emerald-300 font-bold";
+                else if (remain === 1) bgClass = "bg-cyan-950/60 border-cyan-600/60 text-cyan-300 font-bold";
+                else bgClass = "bg-slate-900/40 border-slate-800/60 text-slate-600 opacity-40";
+
+                item.className = `p-1 rounded-lg border text-[10px] flex flex-col justify-between items-center ${bgClass}`;
+                item.innerHTML = `
+                    <span>${i}</span>
+                    <span class="text-[9px] font-black">${remain}張</span>
+                `;
+                deckTrackerEl.appendChild(item);
+            }
+        }
+
+        function updateStats() {
+            deckCountEl.innerText = deck.length;
+            turnCountEl.innerText = filledCount;
+        }
+
+        function calculateSegments() {
+            const segments = [];
+            let currentSeg = null;
+
+            for (let i = 0; i < STATIONS.length; i++) {
+                const val = board[i];
+                if (val === null) {
+                    if (currentSeg) {
+                        segments.push(currentSeg);
+                        currentSeg = null;
+                    }
+                    continue;
+                }
+
+                if (!currentSeg) {
+                    currentSeg = { values: [val], indices: [i] };
+                } else {
+                    const prevVal = currentSeg.values[currentSeg.values.length - 1];
+                    if (val >= prevVal) {
+                        currentSeg.values.push(val);
+                        currentSeg.indices.push(i);
+                    } else {
+                        segments.push(currentSeg);
+                        currentSeg = { values: [val], indices: [i] };
+                    }
+                }
+            }
+
+            if (currentSeg) {
+                segments.push(currentSeg);
+            }
+
+            return segments;
+        }
+
+        function renderMetroMap() {
+            metroMapContainer.innerHTML = '';
+            const segments = calculateSegments();
+
+            STATIONS.forEach((stationName, idx) => {
+                const val = board[idx];
+                const isInteractive = isWaitingForPlace && val === null;
+
+                // Find segment index if filled
+                let segIndex = -1;
+                if (val !== null) {
+                    segIndex = segments.findIndex(s => s.indices.includes(idx));
+                }
+
+                const nodeWrapper = document.createElement('div');
+                nodeWrapper.className = "flex flex-col items-center justify-center relative group";
+
+                // Base style for station circle (Metro Map Style: White Circle with Black Border)
+                let circleStyle = "bg-white text-slate-900 border-4 border-slate-900";
+                if (segIndex !== -1) {
+                    circleStyle = `segment-color-${segIndex % 8} border-4 font-black shadow-md`;
+                }
+
+                nodeWrapper.innerHTML = `
+                    <!-- Station Header Badge -->
+                    <div class="text-[10px] font-bold text-slate-400 mb-1 flex items-center gap-1">
+                        ${idx === 0 ? '<span class="text-emerald-400 font-extrabold">[起點]</span>' : ''}
+                        ${idx === STATIONS.length - 1 ? '<span class="text-rose-400 font-extrabold">[終點]</span>' : ''}
+                        ${segIndex !== -1 ? `<span class="badge-segment-${segIndex % 8} px-1.5 py-0.2 rounded text-[8px] font-black">段${segIndex + 1}</span>` : ''}
+                    </div>
+
+                    <!-- Station Node Circle (Black Border White Interior) -->
+                    <div class="w-16 h-16 rounded-full flex items-center justify-center text-xl font-black transition-all duration-200 cursor-pointer ${circleStyle} ${isInteractive ? 'station-pulse hover:scale-110 bg-cyan-50 border-cyan-400' : ''}">
+                        ${val !== null ? val : `<span class="text-slate-300 text-xs font-normal">空</span>`}
+                    </div>
+
+                    <!-- Station Name Below Circle -->
+                    <div class="mt-2 text-center">
+                        <span class="text-xs font-bold text-slate-200 block tracking-tight">${stationName}</span>
+                        <span class="text-[9px] text-slate-500 font-mono">R${(28 - idx).toString().padStart(2, '0')}</span>
+                    </div>
+                `;
+
+                if (isInteractive) {
+                    nodeWrapper.querySelector('.w-16').addEventListener('click', () => placeCard(idx));
+                }
+
+                metroMapContainer.appendChild(nodeWrapper);
+            });
+        }
+
+        drawBtn.addEventListener('click', () => {
+            if (isWaitingForPlace) {
+                actionHintEl.innerText = "請先選擇路線上一個車站填入目前數字！";
+                return;
+            }
+
+            if (deck.length === 0 || filledCount >= STATIONS.length) {
+                actionHintEl.innerText = "全線車站已填滿，遊戲結束！";
+                return;
+            }
+
+            currentCard = deck.pop();
+            isWaitingForPlace = true;
+
+            // UI Updates
+            cardLabel.classList.add('hidden');
+            cardNumber.innerText = currentCard;
+            cardNumber.classList.remove('hidden');
+            cardSubIcon.classList.remove('hidden');
+            cardDisplay.className = "w-36 h-48 my-2 rounded-2xl border-4 border-rose-500 bg-slate-800 shadow-xl shadow-rose-500/20 flex flex-col items-center justify-center relative transition-all duration-300 scale-105";
+
+            drawBtn.disabled = true;
+            actionHintEl.innerText = "請點擊路線上的空白車站圓圈填入數字";
+
+            renderDeckTracker();
+            updateStats();
+            renderMetroMap();
+        });
+
+        function placeCard(index) {
+            if (!isWaitingForPlace || board[index] !== null) return;
+
+            board[index] = currentCard;
+            filledCount++;
+            isWaitingForPlace = false;
+            currentCard = null;
+
+            // Reset Card UI
+            cardDisplay.className = "w-36 h-48 my-2 rounded-2xl border-4 border-slate-700 bg-slate-800 flex flex-col items-center justify-center relative shadow-inner transition-all duration-300 opacity-60";
+            cardLabel.innerText = "號碼已停靠車站";
+            cardLabel.classList.remove('hidden');
+            cardNumber.classList.add('hidden');
+            cardSubIcon.classList.add('hidden');
+
+            actionHintEl.innerText = "";
+
+            if (filledCount < STATIONS.length && deck.length > 0) {
+                drawBtn.disabled = false;
+            } else {
+                drawBtn.disabled = true;
+                drawBtn.innerHTML = `<i class="fa-solid fa-flag-checkered mr-1"></i> 全線通車完畢`;
+                actionHintEl.innerText = "🎉 恭喜完成淡水信義線全部 27 站！結算終點得分！";
+            }
+
+            renderDeckTracker();
+            updateStats();
+            renderMetroMap();
+            evaluateBoard();
+        }
+
+        function evaluateBoard() {
+            const segments = calculateSegments();
+            let totalScore = 0;
+
+            segmentsListEl.innerHTML = '';
+
+            if (segments.length === 0) {
+                segmentsListEl.innerHTML = '<p class="text-center text-slate-500 text-xs py-4">填入數字後將即時計算列車長度得分</p>';
+                totalScoreEl.innerHTML = `0 <span class="text-sm font-normal text-slate-400">分</span>`;
+                return;
+            }
+
+            segments.forEach((seg, idx) => {
+                const len = seg.values.length;
+                const score = SCORE_TABLE[len] || 0;
+                totalScore += score;
+
+                const segItem = document.createElement('div');
+                segItem.className = 'flex items-center justify-between bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60 text-xs';
+                
+                const valStr = seg.values.join(' ➔ ');
+
+                segItem.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="badge-segment-${idx % 8} text-[10px] font-black px-2 py-0.5 rounded-full">
+                            列車段 ${idx + 1}
+                        </span>
+                        <span class="font-bold text-slate-200">[ ${valStr} ]</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-slate-400">連續長度: <strong class="text-rose-400 font-bold">${len} 站</strong></span>
+                        <span class="font-black text-amber-400 text-sm">+${score} 分</span>
+                    </div>
+                `;
+
+                segmentsListEl.appendChild(segItem);
+            });
+
+            totalScoreEl.innerHTML = `${totalScore} <span class="text-sm font-normal text-slate-400">分</span>`;
+        }
+
+        resetBtn.addEventListener('click', () => {
+            if (confirm("確定要重新開始遊戲嗎？現有路線進度將會重置。")) {
+                initGame();
+            }
+        });
+
+        // Initialize on load
+        window.onload = function() {
+            initGame();
+        };
+    </script>
+</body>
+</html>
