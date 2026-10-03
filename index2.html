@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>解答之書 - Book of Answers</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Noto+Serif+TC:wght@400;600;700;900&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-dark: #05060a;
+            --gold-primary: #d4af37;
+            --gold-light: #f3e5ab;
+            --gold-shadow: rgba(212, 175, 55, 0.3);
+            --candle-flame: #ff9d00;
+            --candle-core: #fff6d1;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            font-family: 'Noto Serif TC', serif;
+            color: #e2e8f0;
+            overflow-x: hidden;
+            perspective: 1200px;
+        }
+
+        .cinzel {
+            font-family: 'Cinzel', serif;
+        }
+
+        /* Canvas ambient background */
+        #particleCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Book Container Perspective */
+        .book-container {
+            perspective: 1500px;
+            z-index: 10;
+        }
+
+        .book {
+            width: 310px;
+            height: 450px;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+            cursor: pointer;
+        }
+
+        @media (min-width: 640px) {
+            .book {
+                width: 370px;
+                height: 510px;
+            }
+        }
+
+        .book-cover, .book-page {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 8px 16px 16px 8px;
+            transform-origin: left center;
+            transition: transform 1.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+            transform-style: preserve-3d;
+            box-shadow: -10px 10px 30px rgba(0, 0, 0, 0.9),
+                        0 0 20px rgba(0, 0, 0, 0.7);
+        }
+
+        /* Hardcover Leather Texture & Gold Foil Border */
+        .book-cover {
+            background: linear-gradient(135deg, #181924 0%, #0c0d14 100%);
+            border: 2px solid #2a2c3d;
+            border-left: 12px solid #090a0f;
+            z-index: 5;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 2.5rem 1.8rem;
+            box-sizing: border-box;
+            backface-visibility: hidden;
+            background-image: radial-gradient(circle at 50% 50%, rgba(212, 175, 55, 0.05) 0%, transparent 80%);
+        }
+
+        /* Gold Foil Ornament Border */
+        .gold-border {
+            border: 1px solid rgba(212, 175, 55, 0.4);
+            outline: 1px solid rgba(212, 175, 55, 0.2);
+            outline-offset: -6px;
+            position: absolute;
+            top: 15px;
+            bottom: 15px;
+            left: 20px;
+            right: 15px;
+            pointer-events: none;
+            border-radius: 4px;
+        }
+
+        .gold-border::before {
+            content: '✦';
+            position: absolute;
+            top: 4px;
+            left: 6px;
+            color: var(--gold-primary);
+            font-size: 10px;
+        }
+        
+        .gold-border::after {
+            content: '✦';
+            position: absolute;
+            bottom: 4px;
+            right: 6px;
+            color: var(--gold-primary);
+            font-size: 10px;
+        }
+
+        /* Inner Parchment Page */
+        .book-page {
+            background: linear-gradient(to right, #0f1017 0%, #171924 10%, #141520 90%, #0e0f17 100%);
+            border: 1px solid rgba(212, 175, 55, 0.15);
+            border-left: 8px solid #08090d;
+            z-index: 4;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 3rem 2rem;
+            box-sizing: border-box;
+            transform: rotateY(0deg);
+        }
+
+        .book.open .book-cover {
+            transform: rotateY(-160deg);
+        }
+
+        .book.flipping .flipping-page {
+            animation: flipPage 1.1s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
+        }
+
+        @keyframes flipPage {
+            0% {
+                transform: rotateY(0deg);
+                box-shadow: -5px 5px 15px rgba(0,0,0,0.5);
+            }
+            50% {
+                box-shadow: -25px 25px 40px rgba(0,0,0,0.9), 0 0 30px var(--gold-shadow);
+            }
+            100% {
+                transform: rotateY(-180deg);
+                box-shadow: -5px 5px 15px rgba(0,0,0,0.5);
+            }
+        }
+
+        /* Text Shimmer Effect */
+        .gold-text {
+            background: linear-gradient(135deg, #fef08a 0%, #d4af37 50%, #997a15 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 12px rgba(212, 175, 55, 0.25);
+        }
+
+        /* Custom Button Styling */
+        .btn-mystic {
+            background: linear-gradient(135deg, rgba(212, 175, 55, 0.18) 0%, rgba(20, 22, 33, 0.85) 100%);
+            border: 1px solid rgba(212, 175, 55, 0.5);
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.1), inset 0 0 10px rgba(212, 175, 55, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .btn-mystic:hover:not(:disabled) {
+            border-color: var(--gold-primary);
+            box-shadow: 0 0 25px rgba(212, 175, 55, 0.4), inset 0 0 15px rgba(212, 175, 55, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .btn-mystic:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pulse-glow {
+            animation: pulseGlow 3s infinite alternate;
+        }
+
+        @keyframes pulseGlow {
+            0% { filter: drop-shadow(0 0 8px rgba(212, 175, 55, 0.2)); }
+            100% { filter: drop-shadow(0 0 22px rgba(212, 175, 55, 0.6)); }
+        }
+
+        /* -----------------------------------
+           CANDLE & FLAME STYLING
+        ----------------------------------- */
+        .candle-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 15;
+            pointer-events: none;
+        }
+
+        /* Candle Base Stand */
+        .candle-stand {
+            width: 44px;
+            height: 12px;
+            background: linear-gradient(90deg, #1f1d18, #4d4432, #1f1d18);
+            border-radius: 6px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.8);
+            position: relative;
+        }
+
+        .candle-stand::before {
+            content: '';
+            position: absolute;
+            top: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 28px;
+            height: 6px;
+            background: #3b3425;
+            border-radius: 3px;
+        }
+
+        /* Wax Body */
+        .candle-body {
+            width: 24px;
+            height: 140px;
+            background: linear-gradient(90deg, #d8ccb8 0%, #fdf8ef 40%, #c2b59e 100%);
+            border-radius: 4px 4px 2px 2px;
+            position: relative;
+            box-shadow: inset -3px 0 8px rgba(0,0,0,0.3), inset 3px 0 8px rgba(255,255,255,0.5);
+        }
+
+        @media (min-width: 640px) {
+            .candle-body {
+                width: 28px;
+                height: 180px;
+            }
+        }
+
+        /* Dripping Wax Details */
+        .wax-drip {
+            position: absolute;
+            background: #fdf8ef;
+            border-radius: 0 0 4px 4px;
+            box-shadow: inset -1px 0 2px rgba(0,0,0,0.2);
+        }
+        .drip-1 { top: 0; left: 2px; width: 6px; height: 28px; }
+        .drip-2 { top: 0; right: 4px; width: 5px; height: 18px; }
+
+        /* Wick */
+        .wick {
+            width: 3px;
+            height: 12px;
+            background: #2a251e;
+            border-radius: 2px 2px 0 0;
+            margin-bottom: -2px;
+        }
+
+        /* Flame Component */
+        .flame-wrapper {
+            position: relative;
+            width: 20px;
+            height: 38px;
+            margin-bottom: -4px;
+            animation: flicker 1.8s infinite alternate ease-in-out;
+        }
+
+        .flame {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 16px;
+            height: 32px;
+            background: radial-gradient(ellipse at bottom, #ffea9f 0%, #ff9d00 50%, rgba(255, 68, 0, 0.7) 85%, transparent 100%);
+            border-radius: 50% 50% 35% 35% / 70% 70% 30% 30%;
+            box-shadow: 0 -10px 20px rgba(255, 157, 0, 0.8), 0 0 40px rgba(255, 157, 0, 0.6);
+            animation: flameMovement 1.2s infinite ease-in-out alternate;
+            transform-origin: center bottom;
+        }
+
+        .flame-core {
+            position: absolute;
+            bottom: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 6px;
+            height: 14px;
+            background: #ffffff;
+            border-radius: 50% 50% 40% 40% / 80% 80% 20% 20%;
+            box-shadow: 0 0 10px #ffffff;
+            opacity: 0.9;
+        }
+
+        /* Ambient Flame Halo */
+        .flame-halo {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 120px;
+            height: 120px;
+            background: radial-gradient(circle, rgba(255, 157, 0, 0.25) 0%, rgba(255, 100, 0, 0.08) 50%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: haloPulse 2s infinite alternate ease-in-out;
+        }
+
+        @keyframes flicker {
+            0% { transform: rotate(-1.5deg) scale(0.98); }
+            25% { transform: rotate(1deg) scale(1.02); }
+            50% { transform: rotate(-0.8deg) scale(0.96); }
+            75% { transform: rotate(1.2deg) scale(1.04); }
+            100% { transform: rotate(-1deg) scale(1); }
+        }
+
+        @keyframes flameMovement {
+            0% { height: 30px; border-radius: 50% 50% 35% 35% / 70% 70% 30% 30%; }
+            100% { height: 35px; border-radius: 45% 45% 38% 38% / 75% 75% 25% 25%; }
+        }
+
+        @keyframes haloPulse {
+            0% { opacity: 0.7; transform: translate(-50%, -50%) scale(0.92); }
+            100% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between items-center relative py-6 px-4">
+
+    <!-- Ambient Particle Canvas Background -->
+    <canvas id="particleCanvas"></canvas>
+
+    <!-- Header Navigation -->
+    <header class="w-full max-w-5xl flex justify-between items-center z-20 px-2 sm:px-6">
+        <div class="flex items-center gap-3">
+            <span class="text-xl sm:text-2xl text-amber-400"><i class="fa-solid fa-book-bookmark"></i></span>
+            <span class="cinzel text-lg sm:text-xl font-bold tracking-widest gold-text">BOOK OF ANSWERS</span>
+        </div>
+        <div class="flex items-center gap-3">
+            <button id="soundToggleBtn" onclick="toggleAudio()" class="w-10 h-10 rounded-full border border-amber-500/30 flex items-center justify-center text-amber-400 hover:border-amber-400 transition-colors bg-slate-900/60 backdrop-blur-sm" title="開啟/關閉靜心音效">
+                <i id="soundIcon" class="fa-solid fa-volume-xmark"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Ritual Stage Area -->
+    <main class="w-full flex-1 flex flex-col items-center justify-center my-4 z-10">
+        <!-- Guidance Banner -->
+        <p id="instructionText" class="text-amber-200/70 text-sm sm:text-base tracking-widest mb-6 text-center animate-pulse">
+            凝視燭光，靜心默想你的問題 3 秒鐘…
+        </p>
+
+        <!-- Book flanked by Left and Right Ritual Candles -->
+        <div class="flex items-center justify-center gap-4 sm:gap-12 w-full max-w-4xl">
+            
+            <!-- Left Candle -->
+            <div class="candle-container hidden sm:flex">
+                <div class="flame-wrapper">
+                    <div class="flame-halo"></div>
+                    <div class="flame">
+                        <div class="flame-core"></div>
+                    </div>
+                </div>
+                <div class="wick"></div>
+                <div class="candle-body">
+                    <div class="wax-drip drip-1"></div>
+                    <div class="wax-drip drip-2"></div>
+                </div>
+                <div class="candle-stand"></div>
+            </div>
+
+            <!-- 3D Book Container -->
+            <div class="book-container my-2">
+                <div id="book" class="book" onclick="handleBookClick()">
+                    
+                    <!-- Front Cover -->
+                    <div class="book-cover pulse-glow">
+                        <div class="gold-border"></div>
+                        <div class="text-center mt-6">
+                            <div class="text-amber-400/60 text-xs tracking-[0.4em] cinzel uppercase mb-1">Oracle Ritual</div>
+                            <div class="w-8 h-[1px] bg-amber-400/40 mx-auto my-2"></div>
+                        </div>
+
+                        <div class="text-center my-auto">
+                            <div class="text-3xl text-amber-400 mb-4 opacity-90">
+                                <i class="fa-solid fa-compass-drafting"></i>
+                            </div>
+                            <h1 class="cinzel text-2xl sm:text-3xl font-black gold-text tracking-widest mb-2">解 答 之 書</h1>
+                            <p class="text-amber-200/50 text-xs tracking-[0.3em]">BOOK OF ANSWERS</p>
+                        </div>
+
+                        <div class="text-center mb-4">
+                            <p class="text-amber-400/60 text-xs tracking-widest">點 擊 翻 開 啟 示</p>
+                        </div>
+                    </div>
+
+                    <!-- Page underneath (Reveals Answer) -->
+                    <div class="book-page">
+                        <div class="w-full h-full border border-amber-500/20 p-6 sm:p-8 flex flex-col justify-between items-center relative">
+                            <div class="text-amber-400/30 text-xs tracking-widest cinzel">✦ PAGE OF DESTINY ✦</div>
+
+                            <!-- Answer content container -->
+                            <div class="text-center my-auto max-w-[260px]">
+                                <div class="text-amber-400/20 text-3xl mb-4"><i class="fa-solid fa-quote-left"></i></div>
+                                <p id="answerText" class="text-base sm:text-lg leading-relaxed text-amber-100 font-medium tracking-wide opacity-0 transition-opacity duration-1000">
+                                    答案正在凝聚…
+                                </p>
+                                <div class="text-amber-400/20 text-3xl mt-4"><i class="fa-solid fa-quote-right"></i></div>
+                            </div>
+
+                            <div class="text-amber-400/40 text-[10px] tracking-widest uppercase cinzel">Wisdom & Insight</div>
+                        </div>
+                    </div>
+
+                    <!-- Animated overlay page for smooth flip effect -->
+                    <div id="flippingPage" class="book-page flipping-page hidden absolute top-0 left-0">
+                        <div class="w-full h-full border border-amber-500/20 p-6 flex items-center justify-center">
+                            <div class="text-amber-400/40 text-sm tracking-widest">翻 頁 中…</div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Right Candle -->
+            <div class="candle-container hidden sm:flex">
+                <div class="flame-wrapper" style="animation-delay: -0.9s;">
+                    <div class="flame-halo"></div>
+                    <div class="flame" style="animation-delay: -0.6s;">
+                        <div class="flame-core"></div>
+                    </div>
+                </div>
+                <div class="wick"></div>
+                <div class="candle-body">
+                    <div class="wax-drip drip-1" style="height: 22px;"></div>
+                    <div class="wax-drip drip-2" style="height: 32px; left: 4px;"></div>
+                </div>
+                <div class="candle-stand"></div>
+            </div>
+
+        </div>
+
+        <!-- Action Control Buttons -->
+        <div class="mt-8 flex flex-col sm:flex-row gap-4 items-center">
+            <button id="drawBtn" onclick="drawAnswer()" class="btn-mystic px-8 py-3.5 rounded-full text-amber-300 font-semibold tracking-widest text-sm sm:text-base flex items-center gap-3">
+                <i class="fa-solid fa-sparkles text-amber-400"></i>
+                <span>尋求解答</span>
+            </button>
+            <button id="resetBtn" onclick="closeBook()" class="px-6 py-3.5 rounded-full text-slate-400 hover:text-amber-300 transition-colors text-xs sm:text-sm tracking-widest border border-slate-800 hover:border-amber-500/30 hidden">
+                <i class="fa-solid fa-arrow-rotate-left mr-2"></i>合上書本
+            </button>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="z-20 text-center py-2 text-slate-500 text-xs tracking-widest">
+        20261003 新北夢N - AI Learning Workshop
+    </footer>
+
+    <script>
+        // Answer Sentences Pool (16 Wisdom Quotes)
+        const answers = [
+            "答案早已在你心中，只是你還不敢承認。",
+            "順應流向，有時停頓也是一種前進。",
+            "勇敢踏出那一步，宇宙會為你鋪路。",
+            "換個角度思考，當下的困境會變成轉機。",
+            "給自己一點時間，不必急著現在要答案。",
+            "相信你的直覺，它比邏輯更懂得你的心。",
+            "放下對完美的執著，接納眼前的殘缺。",
+            "答案是肯定且明確的，只要你願意付出努力。",
+            "別讓過去的陰影，遮蔽了未來的光芒。",
+            "專注於你能控制的事，其餘的交給時間。",
+            "這並非失去，而是為更好的選擇騰出空間。",
+            "現在不是猶豫的時候，果斷行動吧。",
+            "保持耐心，最美的花朵往往最後綻放。",
+            "傾聽你內心深處第一個冒出的念頭。",
+            "嘗試用寬容看待一切，結尾將出乎意料的好。",
+            "別管別人怎麼說，堅持你最初的信念。"
+        ];
+
+        let isOpen = false;
+        let isAnimating = false;
+        let lastIndex = -1;
+        let audioEnabled = false;
+
+        // Sound Synthesis using Web Audio API
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playFlipSound() {
+            if (!audioEnabled || !audioCtx) return;
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                const filter = audioCtx.createBiquadFilter();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.4);
+
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(300, audioCtx.currentTime);
+
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.4);
+            } catch (e) { console.error(e); }
+        }
+
+        function playChimeSound() {
+            if (!audioEnabled || !audioCtx) return;
+            try {
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                notes.forEach((freq, index) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, audioCtx.currentTime + index * 0.08);
+
+                    gain.gain.setValueAtTime(0.08, audioCtx.currentTime + index * 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + index * 0.08 + 1.2);
+
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+
+                    osc.start(audioCtx.currentTime + index * 0.08);
+                    osc.stop(audioCtx.currentTime + index * 0.08 + 1.2);
+                });
+            } catch (e) { console.error(e); }
+        }
+
+        function toggleAudio() {
+            initAudio();
+            audioEnabled = !audioEnabled;
+            const soundIcon = document.getElementById('soundIcon');
+            const soundBtn = document.getElementById('soundToggleBtn');
+
+            if (audioEnabled) {
+                soundIcon.className = 'fa-solid fa-volume-high';
+                soundBtn.classList.add('border-amber-400', 'bg-amber-500/20');
+                playChimeSound();
+            } else {
+                soundIcon.className = 'fa-solid fa-volume-xmark';
+                soundBtn.classList.remove('border-amber-400', 'bg-amber-500/20');
+            }
+        }
+
+        function handleBookClick() {
+            if (isAnimating) return;
+            drawAnswer();
+        }
+
+        function drawAnswer() {
+            if (isAnimating) return;
+            initAudio();
+            isAnimating = true;
+
+            const book = document.getElementById('book');
+            const flippingPage = document.getElementById('flippingPage');
+            const answerText = document.getElementById('answerText');
+            const drawBtn = document.getElementById('drawBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const instructionText = document.getElementById('instructionText');
+
+            drawBtn.disabled = true;
+
+            let newIndex;
+            do {
+                newIndex = Math.floor(Math.random() * answers.length);
+            } while (newIndex === lastIndex);
+            lastIndex = newIndex;
+
+            playFlipSound();
+
+            if (!isOpen) {
+                book.classList.add('open');
+                isOpen = true;
+
+                setTimeout(() => {
+                    answerText.innerText = answers[newIndex];
+                    answerText.style.opacity = '1';
+                    playChimeSound();
+                    spawnGoldBurstParticles();
+                    
+                    instructionText.innerText = "心靈有了啟示，平靜地接受它。";
+                    drawBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate text-amber-400"></i><span>再抽一次</span>';
+                    drawBtn.disabled = false;
+                    resetBtn.classList.remove('hidden');
+                    isAnimating = false;
+                }, 1000);
+
+            } else {
+                answerText.style.opacity = '0';
+                flippingPage.classList.remove('hidden');
+                book.classList.add('flipping');
+
+                setTimeout(() => {
+                    answerText.innerText = answers[newIndex];
+                    answerText.style.opacity = '1';
+                    playChimeSound();
+                    spawnGoldBurstParticles();
+                }, 550);
+
+                setTimeout(() => {
+                    book.classList.remove('flipping');
+                    flippingPage.classList.add('hidden');
+                    drawBtn.disabled = false;
+                    isAnimating = false;
+                }, 1100);
+            }
+        }
+
+        function closeBook() {
+            if (isAnimating || !isOpen) return;
+            isAnimating = true;
+
+            const book = document.getElementById('book');
+            const answerText = document.getElementById('answerText');
+            const drawBtn = document.getElementById('drawBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const instructionText = document.getElementById('instructionText');
+
+            answerText.style.opacity = '0';
+            playFlipSound();
+
+            setTimeout(() => {
+                book.classList.remove('open');
+                isOpen = false;
+                instructionText.innerText = "凝視燭光，靜心默想你的問題 3 秒鐘…";
+                drawBtn.innerHTML = '<i class="fa-solid fa-sparkles text-amber-400"></i><span>尋求解答</span>';
+                drawBtn.disabled = false;
+                resetBtn.classList.add('hidden');
+                isAnimating = false;
+            }, 300);
+        }
+
+        // Particle Canvas Logic
+        const canvas = document.getElementById('particleCanvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        let burstParticles = [];
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 1.5 + 0.5;
+                this.alpha = Math.random() * 0.6 + 0.1;
+                this.speedY = Math.random() * -0.3 - 0.1;
+                this.pulseSpeed = Math.random() * 0.02 + 0.005;
+            }
+            update() {
+                this.y += this.speedY;
+                this.alpha += Math.sin(Date.now() * this.pulseSpeed) * 0.005;
+                if (this.y < 0) this.y = canvas.height;
+            }
+            draw() {
+                ctx.fillStyle = `rgba(212, 175, 55, ${Math.max(0, this.alpha)})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        class BurstParticle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 4 + 1.5;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.size = Math.random() * 3 + 1;
+                this.alpha = 1;
+                this.decay = Math.random() * 0.02 + 0.015;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.05;
+                this.alpha -= this.decay;
+            }
+            draw() {
+                ctx.fillStyle = `rgba(243, 229, 171, ${Math.max(0, this.alpha)})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < 70; i++) {
+            particles.push(new Particle());
+        }
+
+        function spawnGoldBurstParticles() {
+            const rect = document.getElementById('book').getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+
+            for (let i = 0; i < 35; i++) {
+                burstParticles.push(new BurstParticle(centerX, centerY));
+            }
+        }
+
+        function renderLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+
+            for (let i = burstParticles.length - 1; i >= 0; i--) {
+                const bp = burstParticles[i];
+                bp.update();
+                bp.draw();
+                if (bp.alpha <= 0) {
+                    burstParticles.splice(i, 1);
+                }
+            }
+
+            requestAnimationFrame(renderLoop);
+        }
+
+        window.onload = function() {
+            renderLoop();
+        };
+    </script>
+</body>
+</html>
