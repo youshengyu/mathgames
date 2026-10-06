@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>魔數 - 九宮格數字魔術</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Outfit', 'Noto Serif TC', serif;
+            background: radial-gradient(circle at center, #1a102f 0%, #080314 100%);
+            color: #f3f4f6;
+            min-height: 100vh;
+        }
+
+        .card-shadow {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+        }
+
+        .gold-border {
+            border: 2px solid #d4af37;
+        }
+
+        .gold-text {
+            background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .gold-button {
+            background: linear-gradient(135deg, #d4af37 0%, #aa7c11 100%);
+            color: #0d0718;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .gold-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.6);
+        }
+
+        /* Playing Card Styles */
+        .poker-card {
+            user-select: none;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            touch-action: manipulation;
+        }
+
+        .poker-card.dragging {
+            opacity: 0.5;
+            transform: scale(0.95);
+        }
+
+        .poker-card.face-down {
+            background: linear-gradient(135deg, #2c1a4d 0%, #0f081d 100%) !important;
+            border: 2px solid #a855f7 !important;
+        }
+
+        .poker-card.selected {
+            ring: 4px #eab308;
+            transform: translateY(-8px);
+        }
+
+        /* Sparkle Animation */
+        @keyframes magicGlow {
+            0%, 100% { filter: drop-shadow(0 0 8px rgba(234, 179, 8, 0.4)); }
+            50% { filter: drop-shadow(0 0 20px rgba(234, 179, 8, 0.9)); }
+        }
+
+        .magic-glow {
+            animation: magicGlow 2s infinite;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 flex flex-col justify-between items-center">
+
+    <!-- Header -->
+    <header class="text-center my-4">
+        <h1 class="text-4xl md:text-6xl font-extrabold gold-text tracking-wider mb-2">
+            <i class="fa-solid fa-wand-magic-sparkles text-amber-400 mr-2"></i>魔 數
+        </h1>
+        <p class="text-purple-300 text-sm md:text-base font-medium">神奇的九宮格數字魔術 · 數學老師的特別奇蹟</p>
+    </header>
+
+    <!-- Main Container -->
+    <main class="w-full max-w-4xl flex flex-col items-center gap-6 my-auto">
+        
+        <!-- Instruction Banner -->
+        <div id="instruction-box" class="w-full bg-slate-900/80 border border-purple-500/30 rounded-2xl p-4 text-center shadow-lg backdrop-blur-md">
+            <p id="instruction-text" class="text-lg md:text-xl font-medium text-amber-200">
+                <i class="fa-solid fa-circle-info mr-2 text-purple-400"></i>第一步：請將上方的 9 張牌拖曳（或點擊選擇）填入九宮格中。
+            </p>
+        </div>
+
+        <!-- Unplaced Cards Dock (Placed above the Grid) -->
+        <div id="deck-section" class="w-full bg-slate-900/60 p-4 rounded-2xl border border-purple-800/40">
+            <p class="text-xs text-purple-300 mb-3 text-center">待排列卡牌（點擊卡牌後點選方格，或直接拖曳放置）</p>
+            <div id="deck-container" class="flex flex-wrap justify-center gap-2 md:gap-3 min-h-[90px] items-center">
+                <!-- Cards will be initialized here by JS -->
+            </div>
+        </div>
+
+        <!-- 3x3 Grid Section -->
+        <div class="w-full max-w-md bg-purple-950/40 p-4 md:p-6 rounded-3xl border border-purple-800/50 backdrop-blur-md card-shadow">
+            <div class="flex justify-between items-center mb-3 px-1">
+                <span class="text-xs font-semibold tracking-wider text-purple-300 uppercase">3x3 數字九宮格</span>
+                <button id="btn-auto-fill" onclick="autoFillGrid()" class="text-xs bg-purple-800/60 hover:bg-purple-700 text-purple-200 px-3 py-1.5 rounded-full transition border border-purple-500/30">
+                    <i class="fa-solid fa-bolt mr-1 text-amber-400"></i>快速隨機填入
+                </button>
+            </div>
+            
+            <div id="grid-container" class="grid grid-cols-3 gap-3 aspect-square w-full">
+                <!-- 9 Grid Slots -->
+                <div class="grid-slot bg-slate-900/60 border-2 border-dashed border-purple-700/60 rounded-xl flex items-center justify-center relative hover:border-amber-400 transition" data-index="0" onclick="handleSlotClick(0)"></div>
+                <div class="grid-slot bg-slate-900/60 border-2 border-dashed border-purple-700/60 rounded-xl flex items-center justify-center relative hover:border-amber-400 transition" data-index="1" onclick="handleSlotClick(1)"></div>
+                <div class="grid-slot bg-slate-900/60 border-2 border-dashed border-purple-700/60 rounded-xl flex items-center justify-center relative hover:border-amber-400 transition" data-index="2" onclick="handleSlotClick(2)"></div>
+                <div class="grid-slot bg-slate-900/60 border-2 border-dashed border-purple-700/60 rounded-xl flex items-center justify-center relative hover:border-amber-400 transition" data-index="3" onclick="handleSlotClick(3)"></div>
+                <div class="grid-slot bg-slate-900/60 border-2 border-dashed border-purple-700/60 rounded-xl flex items-center justify-center relative hover:border-amber-400 transition" data-index="4" onclick="handleSlotClick(4)"></div>
+                <div class="grid-slot bg-slate-900/60 border-2 border-dashed border-purple-700/60 rounded-xl flex items-center justify-center relative hover:border-amber-400 transition" data-index="5" onclick="handleSlotClick(5)"></div>
+                <div class="grid-slot bg-slate-900/60 border-2 border-dashed border-purple-700/60 rounded-xl flex items-center justify-center relative hover:border-amber-400 transition" data-index="6" onclick="handleSlotClick(6)"></div>
+                <div class="grid-slot bg-slate-900/60 border-2 border-dashed border-purple-700/60 rounded-xl flex items-center justify-center relative hover:border-amber-400 transition" data-index="7" onclick="handleSlotClick(7)"></div>
+                <div class="grid-slot bg-slate-900/60 border-2 border-dashed border-purple-700/60 rounded-xl flex items-center justify-center relative hover:border-amber-400 transition" data-index="8" onclick="handleSlotClick(8)"></div>
+            </div>
+        </div>
+
+        <!-- Calculation Result Area -->
+        <div id="calc-panel" class="w-full max-w-md bg-gradient-to-r from-purple-950/80 to-slate-900/80 border border-amber-500/30 rounded-2xl p-5 text-center hidden backdrop-blur-md shadow-2xl">
+            <h3 class="text-sm font-semibold text-purple-300 mb-2 uppercase tracking-widest">三組三位數總和計算</h3>
+            
+            <div id="calc-breakdown" class="text-lg md:text-xl font-mono text-slate-200 mb-3 bg-black/30 py-2 px-4 rounded-lg inline-block">
+                000 + 000 + 000
+            </div>
+
+            <div class="text-2xl md:text-3xl font-extrabold gold-text mb-4">
+                總和為：<span id="total-sum-display" class="font-mono text-amber-300">0</span>
+            </div>
+
+            <button id="btn-reveal" onclick="revealMiracle()" class="w-full gold-button py-3.5 px-6 rounded-xl text-lg shadow-lg flex items-center justify-center gap-2 magic-glow">
+                <i class="fa-solid fa-hat-wizard text-xl"></i>
+                請魔數師見證奇蹟
+            </button>
+        </div>
+
+        <!-- Action Control Buttons -->
+        <div class="flex gap-4">
+            <button onclick="resetGame()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-5 py-2.5 rounded-xl border border-slate-600 transition flex items-center gap-2 text-sm">
+                <i class="fa-solid fa-rotate-left"></i> 重置牌局
+            </button>
+        </div>
+
+    </main>
+
+    <!-- Miracle Revelation Modal -->
+    <div id="miracle-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-slate-900 border-2 border-amber-500/80 rounded-3xl p-6 md:p-8 max-w-lg w-full text-center relative shadow-2xl transform transition-all scale-95 opacity-0" id="modal-content">
+            
+            <div class="absolute -top-10 left-1/2 -translate-x-1/2 w-20 h-20 bg-amber-500 rounded-full border-4 border-slate-900 flex items-center justify-center shadow-lg">
+                <i class="fa-solid fa-wand-magic-sparkles text-3xl text-slate-950"></i>
+            </div>
+
+            <h2 class="text-2xl md:text-3xl font-extrabold gold-text mt-6 mb-2">奇 蹟 揭 曉 ！</h2>
+            <p class="text-purple-300 text-sm mb-6">魔數師早已看透了一切...</p>
+
+            <div class="bg-purple-950/60 rounded-2xl p-6 border border-purple-500/40 mb-6 flex flex-col items-center">
+                <p class="text-slate-300 text-sm mb-3">你蓋住的卡牌就是：</p>
+                <div id="revealed-card-slot" class="w-24 h-36 flex items-center justify-center transform hover:scale-105 transition">
+                    <!-- Revealed Card Rendered Here -->
+                </div>
+            </div>
+
+            <!-- Mathematical Explanation Toggle Button -->
+            <button id="btn-toggle-math" onclick="toggleMathExplanation()" class="w-full bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 font-medium py-2.5 px-4 rounded-xl mb-4 text-xs md:text-sm flex items-center justify-center gap-2 transition">
+                <i class="fa-solid fa-graduation-cap text-base"></i>
+                <span id="toggle-math-text">顯示數學魔術原理</span>
+                <i id="toggle-math-icon" class="fa-solid fa-chevron-down text-xs"></i>
+            </button>
+
+            <!-- Mathematical Explanation Content (Hidden by default) -->
+            <div id="math-explanation" class="hidden text-left bg-slate-950/80 p-4 rounded-xl border border-slate-800 mb-6 text-xs md:text-sm leading-relaxed text-slate-300 transition-all">
+                <div class="font-bold text-amber-400 mb-2 flex items-center gap-1.5 border-b border-slate-800 pb-2">
+                    <i class="fa-solid fa-lightbulb"></i> 教師教學註解與破解原理：
+                </div>
+                <p class="mb-2">1. 數字 1 到 9 的總和為 <span class="text-amber-300 font-bold">45</span>（4 + 5 = 9，為 9 的倍數）。</p>
+                <p class="mb-2">2. 任意排列組合成的三個三位數，其「數字總和」除以 9 的餘數與原先 9 個數字總和除以 9 的餘數相同。</p>
+                <p class="mb-2">3. 蓋上的牌當作 0 後，設三個三位數總和除以 9 的餘數為 <span class="font-mono text-amber-300">R</span>：</p>
+                <ul class="list-disc list-inside space-y-1 text-slate-300 pl-2">
+                    <li>若餘數 <span class="font-mono text-amber-300">R ≠ 0</span>，蓋牌數字為 <span class="text-amber-300 font-bold">9 - R</span></li>
+                    <li>若餘數 <span class="font-mono text-amber-300">R = 0</span>，蓋牌數字為 <span class="text-amber-300 font-bold">9</span></li>
+                </ul>
+            </div>
+
+            <button onclick="closeModal()" class="w-full bg-purple-700 hover:bg-purple-600 text-white font-bold py-3 px-6 rounded-xl transition">
+                再次體驗魔數
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Card definitions provided by specification (Spades & Clubs updated to white background)
+        const BASE_CARDS = [
+            { id: 'S1', suit: '♠', value: 1, name: '黑桃1', color: 'text-slate-900', bg: 'bg-slate-100' },
+            { id: 'H6', suit: '♥', value: 6, name: '紅心6', color: 'text-red-600', bg: 'bg-slate-100' },
+            { id: 'S5', suit: '♠', value: 5, name: '黑桃5', color: 'text-slate-900', bg: 'bg-slate-100' },
+            { id: 'C7', suit: '♣', value: 7, name: '梅花7', color: 'text-slate-900', bg: 'bg-slate-100' },
+            { id: 'H2', suit: '♥', value: 2, name: '紅心2', color: 'text-red-600', bg: 'bg-slate-100' },
+            { id: 'D4', suit: '♦', value: 4, name: '方塊4', color: 'text-red-600', bg: 'bg-slate-100' },
+            { id: 'D8', suit: '♦', value: 8, name: '方塊8', color: 'text-red-600', bg: 'bg-slate-100' },
+            { id: 'S9', suit: '♠', value: 9, name: '黑桃9', color: 'text-slate-900', bg: 'bg-slate-100' },
+            { id: 'C3', suit: '♣', value: 3, name: '梅花3', color: 'text-slate-900', bg: 'bg-slate-100' }
+        ];
+
+        // App state
+        let deck = [];
+        let gridState = new Array(9).fill(null); // Array of card objects or null
+        let selectedDeckCard = null;
+        let faceDownIndex = -1; // Index of card that is face down
+        let currentStep = 1; // 1: Placing cards, 2: Picking card to hide, 3: Showing sum & reveal
+
+        window.onload = function() {
+            resetGame();
+            setupDragAndDrop();
+        };
+
+        // Reset & Shuffle initial deck
+        function resetGame() {
+            // Sort cards by value 1 to 9 ascending
+            deck = [...BASE_CARDS].sort((a, b) => a.value - b.value);
+            gridState = new Array(9).fill(null);
+            selectedDeckCard = null;
+            faceDownIndex = -1;
+            currentStep = 1;
+
+            updateInstruction("第一步：請將上方的 9 張牌拖曳（或點擊選擇）填入九宮格中。");
+            document.getElementById('calc-panel').classList.add('hidden');
+            renderDeck();
+            renderGrid();
+        }
+
+        // Render card UI HTML generator
+        function createCardElement(card, isSmall = false) {
+            const cardDiv = document.createElement('div');
+            const sizeClasses = isSmall 
+                ? 'w-16 h-24 text-sm' 
+                : 'w-20 h-28 md:w-24 md:h-36 text-base md:text-lg';
+
+            cardDiv.className = `poker-card ${sizeClasses} ${card.bg} rounded-xl border border-slate-600 flex flex-col justify-between p-2 shadow-md cursor-pointer select-none font-bold relative`;
+            cardDiv.dataset.id = card.id;
+
+            cardDiv.innerHTML = `
+                <div class="flex justify-between items-center ${card.color} leading-none">
+                    <span>${card.value}</span>
+                    <span class="text-xs">${card.suit}</span>
+                </div>
+                <div class="text-center text-2xl md:text-3xl ${card.color}">${card.suit}</div>
+                <div class="flex justify-between items-center ${card.color} leading-none rotate-180">
+                    <span>${card.value}</span>
+                    <span class="text-xs">${card.suit}</span>
+                </div>
+            `;
+
+            return cardDiv;
+        }
+
+        // Render Cards in Deck
+        function renderDeck() {
+            const deckContainer = document.getElementById('deck-container');
+            deckContainer.innerHTML = '';
+
+            deck.forEach(card => {
+                const cardEl = createCardElement(card, true);
+                
+                // Click handler for selection
+                cardEl.onclick = () => selectCardFromDeck(card, cardEl);
+
+                // Drag support
+                cardEl.draggable = true;
+                cardEl.ondragstart = (e) => {
+                    e.dataTransfer.setData('text/plain', card.id);
+                    cardEl.classList.add('dragging');
+                };
+                cardEl.ondragend = () => {
+                    cardEl.classList.remove('dragging');
+                };
+
+                deckContainer.appendChild(cardEl);
+            });
+
+            if (deck.length === 0) {
+                deckContainer.innerHTML = `<span class="text-xs text-purple-400 italic">卡牌已全部放入九宮格中</span>`;
+            }
+        }
+
+        // Render Grid
+        function renderGrid() {
+            const slots = document.querySelectorAll('.grid-slot');
+
+            slots.forEach((slot, idx) => {
+                slot.innerHTML = '';
+                const card = gridState[idx];
+
+                if (card) {
+                    const cardEl = createCardElement(card, false);
+                    
+                    // If this slot is selected to be face down (Step 2)
+                    if (idx === faceDownIndex) {
+                        cardEl.classList.add('face-down');
+                        cardEl.innerHTML = `
+                            <div class="w-full h-full flex flex-col items-center justify-center text-purple-400 gap-1">
+                                <i class="fa-solid fa-eye-slash text-2xl md:text-3xl"></i>
+                                <span class="text-xs text-amber-300 font-mono">蓋牌 ( 0 )</span>
+                            </div>
+                        `;
+                    }
+
+                    // Click event on card inside grid
+                    cardEl.onclick = (e) => {
+                        e.stopPropagation();
+                        handleGridCardClick(idx);
+                    };
+
+                    slot.appendChild(cardEl);
+                }
+            });
+
+            checkGridStatus();
+        }
+
+        // Handle Selecting card from Deck (Click mode)
+        function selectCardFromDeck(card, element) {
+            if (currentStep !== 1) return;
+
+            document.querySelectorAll('#deck-container .poker-card').forEach(el => el.classList.remove('ring-4', 'ring-amber-400'));
+            
+            if (selectedDeckCard && selectedDeckCard.id === card.id) {
+                selectedDeckCard = null;
+            } else {
+                selectedDeckCard = card;
+                element.classList.add('ring-4', 'ring-amber-400');
+            }
+        }
+
+        // Handle clicking on a Grid Slot
+        function handleSlotClick(slotIndex) {
+            if (currentStep === 1) {
+                if (gridState[slotIndex] !== null) return; // Slot already filled
+
+                if (selectedDeckCard) {
+                    placeCardInGrid(selectedDeckCard, slotIndex);
+                    selectedDeckCard = null;
+                }
+            } else if (currentStep === 2) {
+                // Select which card to flip face down
+                setFaceDownCard(slotIndex);
+            }
+        }
+
+        // Handle clicking a card that is already in the Grid
+        function handleGridCardClick(slotIndex) {
+            if (currentStep === 1) {
+                // Return card back to deck and maintain numerical order
+                const removedCard = gridState[slotIndex];
+                gridState[slotIndex] = null;
+                deck.push(removedCard);
+                deck.sort((a, b) => a.value - b.value);
+                renderDeck();
+                renderGrid();
+            } else if (currentStep === 2) {
+                // Select this card to flip face down
+                setFaceDownCard(slotIndex);
+            }
+        }
+
+        // Place Card into Grid
+        function placeCardInGrid(card, slotIndex) {
+            gridState[slotIndex] = card;
+            deck = deck.filter(c => c.id !== card.id);
+            renderDeck();
+            renderGrid();
+        }
+
+        // Quick Auto-Fill Grid Button
+        function autoFillGrid() {
+            if (currentStep !== 1) resetGame();
+
+            const allCards = [...deck, ...gridState.filter(c => c !== null)];
+            // Shuffle
+            const shuffled = allCards.sort(() => Math.random() - 0.5);
+            
+            gridState = shuffled;
+            deck = [];
+            renderDeck();
+            renderGrid();
+        }
+
+        // Setup Drag & Drop Handlers
+        function setupDragAndDrop() {
+            const slots = document.querySelectorAll('.grid-slot');
+
+            slots.forEach(slot => {
+                slot.ondragover = (e) => e.preventDefault();
+                slot.ondrop = (e) => {
+                    e.preventDefault();
+                    if (currentStep !== 1) return;
+
+                    const cardId = e.dataTransfer.getData('text/plain');
+                    const card = deck.find(c => c.id === cardId);
+                    const slotIndex = parseInt(slot.dataset.index);
+
+                    if (card && gridState[slotIndex] === null) {
+                        placeCardInGrid(card, slotIndex);
+                    }
+                };
+            });
+        }
+
+        // Check grid state to transition steps
+        function checkGridStatus() {
+            const isFull = gridState.every(c => c !== null);
+
+            if (isFull && currentStep === 1) {
+                currentStep = 2;
+                updateInstruction("第二步：請點選九宮格中的任意一張牌將其蓋上（蓋上的牌位置算作 0）。");
+            } else if (!isFull && currentStep === 2) {
+                currentStep = 1;
+                faceDownIndex = -1;
+                document.getElementById('calc-panel').classList.add('hidden');
+                updateInstruction("第一步：請將上方的 9 張牌拖曳（或點擊選擇）填入九宮格中。");
+            }
+        }
+
+        // Set Face Down Card
+        function setFaceDownCard(slotIndex) {
+            faceDownIndex = slotIndex;
+            renderGrid();
+            currentStep = 3;
+
+            updateInstruction("第三步：點擊下方的「請魔數師見證奇蹟」，魔數師將算出你蓋住的牌！");
+            calculateNumbersAndSum();
+        }
+
+        // Calculate three 3-digit numbers and total sum
+        function calculateNumbersAndSum() {
+            // Values: If face-down, value is 0
+            const values = gridState.map((card, idx) => idx === faceDownIndex ? 0 : card.value);
+
+            // Row 1: Index 0, 1, 2
+            const row1 = values[0] * 100 + values[1] * 10 + values[2];
+            // Row 2: Index 3, 4, 5
+            const row2 = values[3] * 100 + values[4] * 10 + values[5];
+            // Row 3: Index 6, 7, 8
+            const row3 = values[6] * 100 + values[7] * 10 + values[8];
+
+            const totalSum = row1 + row2 + row3;
+
+            // Format numbers with leading zeros if needed
+            const pad = (n) => String(n).padStart(3, '0');
+
+            document.getElementById('calc-breakdown').innerText = `${pad(row1)} + ${pad(row2)} + ${pad(row3)}`;
+            document.getElementById('total-sum-display').innerText = totalSum;
+
+            // Show Calculation Panel
+            const calcPanel = document.getElementById('calc-panel');
+            calcPanel.classList.remove('hidden');
+            calcPanel.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Reveal Miracle Function
+        function revealMiracle() {
+            if (faceDownIndex === -1) return;
+
+            const hiddenCard = gridState[faceDownIndex];
+            const slotContainer = document.getElementById('revealed-card-slot');
+            
+            // Render Revealed Card
+            slotContainer.innerHTML = '';
+            const cardEl = createCardElement(hiddenCard, false);
+            cardEl.classList.add('ring-4', 'ring-amber-400', 'magic-glow');
+            slotContainer.appendChild(cardEl);
+
+            // Show Modal with Animation
+            const modal = document.getElementById('miracle-modal');
+            const modalContent = document.getElementById('modal-content');
+            
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 50);
+        }
+
+        function closeModal() {
+            const modalContent = document.getElementById('modal-content');
+            modalContent.classList.remove('scale-100', 'opacity-100');
+            modalContent.classList.add('scale-95', 'opacity-0');
+            
+            setTimeout(() => {
+                document.getElementById('miracle-modal').classList.add('hidden');
+                // Reset math explanation section to hidden for next time
+                const mathSection = document.getElementById('math-explanation');
+                if (mathSection) {
+                    mathSection.classList.add('hidden');
+                    document.getElementById('toggle-math-text').innerText = '顯示數學魔術原理';
+                    document.getElementById('toggle-math-icon').className = 'fa-solid fa-chevron-down text-xs';
+                }
+                resetGame();
+            }, 200);
+        }
+
+        function updateInstruction(text) {
+            document.getElementById('instruction-text').innerHTML = `<i class="fa-solid fa-wand-magic-sparkles mr-2 text-amber-400"></i>${text}`;
+        }
+
+        // Toggle Math Explanation Section
+        function toggleMathExplanation() {
+            const mathSection = document.getElementById('math-explanation');
+            const toggleText = document.getElementById('toggle-math-text');
+            const toggleIcon = document.getElementById('toggle-math-icon');
+            
+            if (mathSection.classList.contains('hidden')) {
+                mathSection.classList.remove('hidden');
+                toggleText.innerText = '隱藏數學魔術原理';
+                toggleIcon.className = 'fa-solid fa-chevron-up text-xs';
+            } else {
+                mathSection.classList.add('hidden');
+                toggleText.innerText = '顯示數學魔術原理';
+                toggleIcon.className = 'fa-solid fa-chevron-down text-xs';
+            }
+        }
+    </script>
+</body>
+</html>
