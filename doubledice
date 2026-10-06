@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>雙骰對映 - 初階版</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&display=swap');
+    
+    body {
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      background-color: #f8fafc;
+    }
+
+    /* Board cell animation */
+    .board-cell {
+      aspect-ratio: 1 / 1;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .cell-filled {
+      animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    @keyframes popIn {
+      0% { transform: scale(0.85); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* 3D Dice Face & Shadow styling */
+    .dice-3d {
+      position: relative;
+      background: linear-gradient(145deg, #ffffff, #f1f5f9);
+      box-shadow: 
+        0px 6px 0px #cbd5e1,
+        0px 10px 15px rgba(0, 0, 0, 0.12),
+        inset -2px -2px 4px rgba(0, 0, 0, 0.05),
+        inset 2px 2px 4px rgba(255, 255, 255, 0.9);
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+      transform-style: preserve-3d;
+    }
+
+    .dice-3d:active {
+      transform: translateY(3px);
+      box-shadow: 
+        0px 3px 0px #cbd5e1,
+        0px 5px 8px rgba(0, 0, 0, 0.12);
+    }
+
+    /* 3D Dice Tumble Animation during roll */
+    @keyframes diceTumble {
+      0% { transform: rotate(0deg) scale(0.9) translateY(0); }
+      25% { transform: rotate(90deg) scale(1.1) translateY(-10px); }
+      50% { transform: rotate(180deg) scale(0.95) translateY(0); }
+      75% { transform: rotate(270deg) scale(1.05) translateY(-5px); }
+      100% { transform: rotate(360deg) scale(1) translateY(0); }
+    }
+
+    .dice-rolling {
+      animation: diceTumble 0.12s infinite linear;
+    }
+
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white; padding: 0; }
+    }
+  </style>
+</head>
+<body class="min-h-screen text-slate-800 flex flex-col justify-between p-3 md:p-6">
+
+  <div class="max-w-5xl mx-auto w-full space-y-4 md:space-y-6 flex-1 flex flex-col justify-center">
+    
+    <!-- Title Header -->
+    <header class="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4">
+      <div>
+        <div class="flex items-center gap-3">
+          <span class="bg-indigo-600 text-white text-xs px-3 py-1 rounded-full font-bold tracking-wide uppercase">初階版</span>
+          <h1 class="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">雙骰對映 SPLITTER</h1>
+        </div>
+        <p class="text-xs md:text-sm text-slate-500 mt-1">10 回合 | 20 格 | 骰子點數 1~3 | 依對稱軸左右同步對映</p>
+      </div>
+      <div class="flex gap-2 w-full sm:w-auto">
+        <button id="btn-leaderboard" class="flex-1 sm:flex-none px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold rounded-xl text-sm transition-colors flex items-center justify-center gap-2 border border-indigo-200">
+          <i class="fa-solid fa-trophy text-amber-500"></i> 排行榜
+        </button>
+        <button id="btn-reset" class="flex-1 sm:flex-none px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-sm transition-colors flex items-center justify-center gap-2 border border-slate-300">
+          <i class="fa-solid fa-rotate-right"></i> 重新開始
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Game Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6 flex-1">
+      
+      <!-- Left Panel: Game Control & Score Card -->
+      <div class="md:col-span-5 space-y-4 flex flex-col">
+        
+        <!-- Dice Control Card -->
+        <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4 flex-1">
+          <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">當前的回合</span>
+            <span id="round-display" class="text-sm font-extrabold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg">第 1 / 10 回合</span>
+          </div>
+
+          <!-- Player Input -->
+          <div class="flex items-center gap-2">
+            <label for="player-name" class="text-xs font-bold text-slate-500 whitespace-nowrap">玩家姓名：</label>
+            <input type="text" id="player-name" placeholder="請輸入姓名" class="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 font-medium">
+          </div>
+
+          <!-- 3D Dice Container -->
+          <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col items-center justify-center min-h-[140px] space-y-3">
+            <div id="dice-area" class="flex items-center justify-center gap-6">
+              <div id="dice-1" class="dice-3d w-16 h-16 md:w-20 md:h-20 bg-white rounded-2xl border-2 border-slate-800 flex items-center justify-center p-2.5">
+                <span class="text-3xl font-black text-indigo-600">?</span>
+              </div>
+              <div id="dice-2" class="dice-3d w-16 h-16 md:w-20 md:h-20 bg-white rounded-2xl border-2 border-slate-800 flex items-center justify-center p-2.5">
+                <span class="text-3xl font-black text-indigo-600">?</span>
+              </div>
+            </div>
+            
+            <p id="status-hint" class="text-xs font-semibold text-slate-600 text-center">
+              請點擊「擲骰子」開始回合
+            </p>
+          </div>
+
+          <!-- Roll Action Button -->
+          <button id="btn-roll" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-bold rounded-xl shadow-lg shadow-indigo-200 transition-all text-sm flex items-center justify-center gap-2">
+            <i class="fa-solid fa-dice text-lg"></i> 擲骰子 (1~3點)
+          </button>
+        </div>
+
+        <!-- Scoreboard Table -->
+        <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-3">
+          <h2 class="text-sm font-extrabold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
+            <i class="fa-solid fa-clipboard-list text-indigo-600"></i> 計分紀錄卡
+          </h2>
+          <div class="overflow-hidden rounded-xl border border-slate-200">
+            <table class="w-full text-center text-xs">
+              <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                <tr>
+                  <th class="py-2 px-1">數字</th>
+                  <th class="py-2 px-1">得分條件</th>
+                  <th class="py-2 px-1">群組數</th>
+                  <th class="py-2 px-1">得分</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 font-semibold text-slate-700">
+                <tr id="score-row-1">
+                  <td class="py-2 font-black text-indigo-600">1</td>
+                  <td class="py-2 text-[11px] text-slate-500">單獨存在</td>
+                  <td class="py-2 count-cell">-</td>
+                  <td class="py-2 score-cell font-bold text-slate-900">-</td>
+                </tr>
+                <tr id="score-row-2">
+                  <td class="py-2 font-black text-indigo-600">2</td>
+                  <td class="py-2 text-[11px] text-slate-500">剛好 2 個 2 相鄰</td>
+                  <td class="py-2 count-cell">-</td>
+                  <td class="py-2 score-cell font-bold text-slate-900">-</td>
+                </tr>
+                <tr id="score-row-3">
+                  <td class="py-2 font-black text-indigo-600">3</td>
+                  <td class="py-2 text-[11px] text-slate-500">剛好 3 個 3 相鄰</td>
+                  <td class="py-2 count-cell">-</td>
+                  <td class="py-2 score-cell font-bold text-slate-900">-</td>
+                </tr>
+                <tr id="score-row-4" class="opacity-40 bg-slate-50">
+                  <td class="py-1.5 font-bold text-slate-400">4</td>
+                  <td class="py-1.5 text-[10px] text-slate-400">基本版適用</td>
+                  <td class="py-1.5 count-cell">0</td>
+                  <td class="py-1.5 score-cell font-bold text-slate-400">0</td>
+                </tr>
+                <tr id="score-row-5" class="opacity-40 bg-slate-50">
+                  <td class="py-1.5 font-bold text-slate-400">5</td>
+                  <td class="py-1.5 text-[10px] text-slate-400">基本版適用</td>
+                  <td class="py-1.5 count-cell">0</td>
+                  <td class="py-1.5 score-cell font-bold text-slate-400">0</td>
+                </tr>
+                <tr id="score-row-6" class="opacity-40 bg-slate-50">
+                  <td class="py-1.5 font-bold text-slate-400">6</td>
+                  <td class="py-1.5 text-[10px] text-slate-400">基本版適用</td>
+                  <td class="py-1.5 count-cell">0</td>
+                  <td class="py-1.5 score-cell font-bold text-slate-400">0</td>
+                </tr>
+              </tbody>
+              <tfoot class="bg-indigo-50/60 border-t-2 border-indigo-100 font-black">
+                <tr>
+                  <td colspan="3" class="py-2.5 text-right pr-3 text-slate-700">總分：</td>
+                  <td id="total-score" class="py-2.5 text-base text-indigo-700">-</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Panel: Symmetrical Board Grid (Enlarged & Centered) -->
+      <div class="md:col-span-7 bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col justify-between items-center min-h-[520px]">
+        <div class="w-full flex justify-between items-center mb-2">
+          <h2 class="text-base font-extrabold text-slate-800 flex items-center gap-2">
+            <i class="fa-solid fa-shapes text-indigo-600"></i> 對稱遊戲盤
+          </h2>
+          <span class="text-xs text-slate-500 font-semibold bg-slate-100 px-3 py-1.5 rounded-lg">
+            10 組對稱對（共 20 格）
+          </span>
+        </div>
+
+        <!-- Centered Board Container with Axis -->
+        <div class="relative w-full my-auto py-6 flex flex-col items-center justify-center">
+          
+          <div class="text-center mb-3">
+            <span class="text-xs md:text-sm font-black text-slate-700 tracking-wider bg-slate-100 px-3 py-1 rounded-full border border-slate-200">對稱軸</span>
+          </div>
+
+          <!-- Central Dashed Axis Line -->
+          <div class="absolute inset-y-12 left-1/2 -translate-x-1/2 w-0 border-r-2 border-dashed border-slate-800 z-10 pointer-events-none"></div>
+
+          <!-- Convex Board Wrapper with Scaled Grid Cells -->
+          <div id="board-container" class="space-y-2 md:space-y-3 relative z-20 flex flex-col items-center justify-center">
+            <!-- Dynamically populated 4-row matrix matching exact user image with bigger cells -->
+          </div>
+        </div>
+
+        <!-- Legend Footer -->
+        <div class="w-full pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-500">
+          <div class="flex items-center gap-2">
+            <span class="w-4 h-4 rounded bg-emerald-100 border-2 border-emerald-500 inline-block"></span>
+            <span>得分群組</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-4 h-4 rounded bg-rose-100 border-2 border-rose-400 inline-block"></span>
+            <span>無效群組（不得分）</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Placement Modal -->
+  <div id="placement-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 space-y-5">
+      <div class="text-center">
+        <h3 class="text-lg font-black text-slate-900">選擇左右填入順序</h3>
+        <p class="text-xs text-slate-500 mt-1">兩顆骰子點數將分別放置於對稱軸左右相對的格子中</p>
+      </div>
+
+      <div class="space-y-3">
+        <!-- Option A -->
+        <button id="opt-order-1" class="w-full p-3.5 border-2 border-slate-200 hover:border-indigo-600 hover:bg-indigo-50/50 rounded-xl transition-all flex items-center justify-between group">
+          <span class="text-xs font-bold text-slate-400 group-hover:text-indigo-600">順序 A</span>
+          <div class="flex items-center gap-4">
+            <div id="opt1-val1" class="dice-3d w-12 h-12 rounded-xl bg-white border border-slate-800 flex items-center justify-center p-1.5"></div>
+            <i class="fa-solid fa-arrows-left-right text-slate-300 group-hover:text-indigo-500 text-sm"></i>
+            <div id="opt1-val2" class="dice-3d w-12 h-12 rounded-xl bg-white border border-slate-800 flex items-center justify-center p-1.5"></div>
+          </div>
+        </button>
+
+        <!-- Option B -->
+        <button id="opt-order-2" class="w-full p-3.5 border-2 border-slate-200 hover:border-indigo-600 hover:bg-indigo-50/50 rounded-xl transition-all flex items-center justify-between group">
+          <span class="text-xs font-bold text-slate-400 group-hover:text-indigo-600">順序 B</span>
+          <div class="flex items-center gap-4">
+            <div id="opt2-val1" class="dice-3d w-12 h-12 rounded-xl bg-white border border-slate-800 flex items-center justify-center p-1.5"></div>
+            <i class="fa-solid fa-arrows-left-right text-slate-300 group-hover:text-indigo-500 text-sm"></i>
+            <div id="opt2-val2" class="dice-3d w-12 h-12 rounded-xl bg-white border border-slate-800 flex items-center justify-center p-1.5"></div>
+          </div>
+        </button>
+      </div>
+
+      <button id="btn-cancel-placement" class="w-full py-2 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors">
+        取消，重新選擇對稱對
+      </button>
+    </div>
+  </div>
+
+  <!-- Game Over Summary Modal -->
+  <div id="gameover-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl text-center space-y-5">
+      <div class="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto text-3xl">
+        <i class="fa-solid fa-trophy text-amber-500"></i>
+      </div>
+      <div>
+        <h3 class="text-2xl font-black text-slate-900">遊戲結束！</h3>
+        <p class="text-xs text-slate-500 mt-1">20 格已全數填滿，得分計算完成！</p>
+      </div>
+
+      <div class="bg-indigo-50/70 p-4 rounded-xl border border-indigo-100">
+        <span id="modal-player-display" class="text-xs text-indigo-500 font-bold block mb-1">玩家名稱</span>
+        <span class="text-xs text-slate-500 font-bold uppercase tracking-wider block">總得分</span>
+        <span id="modal-final-score" class="text-5xl font-black text-indigo-600">0</span>
+        <span class="text-xs font-semibold text-slate-500 block mt-1">分</span>
+        <div id="modal-rank-badge" class="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 bg-amber-100 text-amber-800 text-xs font-extrabold rounded-full border border-amber-300 hidden">
+          <i class="fa-solid fa-crown text-amber-500"></i> <span id="modal-rank-text">榮登排行榜 第 1 名！</span>
+        </div>
+      </div>
+
+      <p class="text-xs text-slate-500 text-left leading-relaxed">
+        💡 盤面已顯示得分群組：<br>
+        • <span class="text-emerald-600 font-bold">綠色</span>：群組相鄰個數剛好等於數字，成功得分！<br>
+        • <span class="text-rose-500 font-bold">紅色</span>：群組個數不吻合，得分 0 分。
+      </p>
+
+      <div class="flex flex-col sm:flex-row gap-2">
+        <button id="btn-modal-leaderboard" class="flex-1 py-3 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-xl border border-amber-300 transition-all text-xs sm:text-sm flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-trophy text-amber-500"></i> 查看排行榜
+        </button>
+        <button id="btn-view-board" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl border border-slate-300 transition-all text-xs sm:text-sm flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-eye"></i> 觀看盤面
+        </button>
+        <button id="btn-modal-restart" class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg transition-all text-xs sm:text-sm flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-rotate-right"></i> 再玩一次
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaderboard Modal -->
+  <div id="leaderboard-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center text-xl font-bold shadow-xs">
+            <i class="fa-solid fa-trophy"></i>
+          </div>
+          <div>
+            <h3 class="text-lg font-black text-slate-900">最高分排行榜</h3>
+            <p class="text-xs text-slate-400">系統保留前 10 名最佳歷史成績</p>
+          </div>
+        </div>
+        <button id="btn-close-leaderboard" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Leaderboard Table -->
+      <div class="max-h-[300px] overflow-y-auto rounded-xl border border-slate-200">
+        <table class="w-full text-center text-xs">
+          <thead class="bg-slate-100 text-slate-600 font-bold sticky top-0 border-b border-slate-200">
+            <tr>
+              <th class="py-2.5 px-2 w-16">名次</th>
+              <th class="py-2.5 px-2 text-left">玩家姓名</th>
+              <th class="py-2.5 px-2 w-20">得分</th>
+              <th class="py-2.5 px-2 w-24">日期</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboard-tbody" class="divide-y divide-slate-100 font-medium">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex justify-between items-center pt-2 border-t border-slate-100">
+        <button id="btn-clear-leaderboard" class="text-xs text-slate-400 hover:text-rose-500 font-semibold transition-colors flex items-center gap-1">
+          <i class="fa-solid fa-trash-can"></i> 清空排行榜
+        </button>
+        <button id="btn-close-leaderboard-footer" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-colors">
+          關閉
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- View Board Floating Bottom Banner -->
+  <div id="view-board-banner" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white backdrop-blur-md px-5 py-3 rounded-2xl shadow-xl z-40 flex items-center gap-3 sm:gap-4 hidden border border-slate-700 max-w-[90vw]">
+    <span class="text-xs font-semibold flex items-center gap-2 whitespace-nowrap">
+      <i class="fa-solid fa-eye text-indigo-400"></i> 正在觀看擺盤面
+    </span>
+    <div class="flex items-center gap-2">
+      <button id="btn-reopen-modal" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1 whitespace-nowrap">
+        <i class="fa-solid fa-trophy"></i> 得分結算
+      </button>
+      <button id="btn-banner-restart" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1 whitespace-nowrap">
+        <i class="fa-solid fa-rotate-right"></i> 重新一局
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // Game Constants
+    const TOTAL_ROUNDS = 10;
+    let currentRound = 1;
+    let rolledDice = null; // [d1, d2]
+    let isDiceRolled = false;
+    let selectedPairKey = null;
+
+    /* 
+      Exact Layout Grid Matrix Matching Image (4 rows x 6 columns)
+      Row 0: [ null, cell, cell, cell, cell, null ] -> 4 cells
+      Row 1: [ cell, cell, cell, cell, cell, cell ] -> 6 cells
+      Row 2: [ cell, cell, cell, cell, cell, cell ] -> 6 cells
+      Row 3: [ null, cell, cell, cell, cell, null ] -> 4 cells
+      Total = 20 cells (10 symmetrical pairs)
+    */
+    const LAYOUT_MASK = [
+      [false, true,  true,  true,  true,  false], 
+      [true,  true,  true,  true,  true,  true ], 
+      [true,  true,  true,  true,  true,  true ], 
+      [false, true,  true,  true,  true,  false]  
+    ];
+
+    let boardState = Array.from({ length: 4 }, () => Array(6).fill(null));
+
+    function getPairKey(r, c) {
+      const minCol = Math.min(c, 5 - c);
+      return `${r}-${minCol}`;
+    }
+
+    // DOM Elements
+    const boardContainerEl = document.getElementById('board-container');
+    const dice1El = document.getElementById('dice-1');
+    const dice2El = document.getElementById('dice-2');
+    const btnRoll = document.getElementById('btn-roll');
+    const btnReset = document.getElementById('btn-reset');
+    const roundDisplay = document.getElementById('round-display');
+    const statusHint = document.getElementById('status-hint');
+    const playerNameInput = document.getElementById('player-name');
+
+    // Leaderboard DOM
+    const leaderboardModal = document.getElementById('leaderboard-modal');
+    const leaderboardTbody = document.getElementById('leaderboard-tbody');
+    const btnLeaderboard = document.getElementById('btn-leaderboard');
+    const btnCloseLeaderboard = document.getElementById('btn-close-leaderboard');
+    const btnCloseLeaderboardFooter = document.getElementById('btn-close-leaderboard-footer');
+    const btnClearLeaderboard = document.getElementById('btn-clear-leaderboard');
+    const btnModalLeaderboard = document.getElementById('btn-modal-leaderboard');
+    const modalRankBadge = document.getElementById('modal-rank-badge');
+    const modalRankText = document.getElementById('modal-rank-text');
+
+    const LEADERBOARD_KEY = 'splitter_leaderboard_v1';
+
+    function getLeaderboard() {
+      try {
+        const data = localStorage.getItem(LEADERBOARD_KEY);
+        return data ? JSON.parse(data) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveLeaderboard(list) {
+      try {
+        localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(list));
+      } catch (e) {
+        console.error('Failed to save leaderboard', e);
+      }
+    }
+
+    function addScoreToLeaderboard(name, score) {
+      const list = getLeaderboard();
+      const now = new Date();
+      const dateStr = `${now.getMonth() + 1}/${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      
+      const newEntry = {
+        name: name || '無名玩家',
+        score: score,
+        date: dateStr,
+        timestamp: Date.now()
+      };
+
+      list.push(newEntry);
+      // Sort descending by score, then newer first
+      list.sort((a, b) => b.score - a.score || b.timestamp - a.timestamp);
+      
+      // Keep Top 10
+      const trimmedList = list.slice(0, 10);
+      saveLeaderboard(trimmedList);
+
+      // Find rank of new entry
+      const rankIndex = trimmedList.findIndex(item => item.timestamp === newEntry.timestamp);
+      return rankIndex !== -1 ? rankIndex + 1 : null;
+    }
+
+    function renderLeaderboardUI() {
+      const list = getLeaderboard();
+      leaderboardTbody.innerHTML = '';
+
+      if (list.length === 0) {
+        leaderboardTbody.innerHTML = `
+          <tr>
+            <td colspan="4" class="py-8 text-slate-400 font-medium">尚無任何成績紀錄，快來挑戰第一名！</td>
+          </tr>
+        `;
+        return;
+      }
+
+      list.forEach((item, index) => {
+        const tr = document.createElement('tr');
+        tr.className = index % 2 === 0 ? 'bg-white' : 'bg-slate-50/60';
+
+        let rankBadge = `<span class="font-bold text-slate-500">${index + 1}</span>`;
+        if (index === 0) rankBadge = `<span class="text-amber-500 font-black text-sm"><i class="fa-solid fa-trophy"></i> 1</span>`;
+        else if (index === 1) rankBadge = `<span class="text-slate-400 font-black text-sm"><i class="fa-solid fa-medal"></i> 2</span>`;
+        else if (index === 2) rankBadge = `<span class="text-amber-700 font-black text-sm"><i class="fa-solid fa-award"></i> 3</span>`;
+
+        tr.innerHTML = `
+          <td class="py-2.5 px-2 font-bold">${rankBadge}</td>
+          <td class="py-2.5 px-2 text-left font-bold text-slate-800 truncate max-w-[120px]">${item.name}</td>
+          <td class="py-2.5 px-2 font-black text-indigo-600 text-sm">${item.score} <span class="text-[10px] font-normal text-slate-400">分</span></td>
+          <td class="py-2.5 px-2 text-[11px] text-slate-400">${item.date}</td>
+        `;
+        leaderboardTbody.appendChild(tr);
+      });
+    }
+
+    function openLeaderboardModal() {
+      renderLeaderboardUI();
+      leaderboardModal.classList.remove('hidden');
+    }
+
+    function closeLeaderboardModal() {
+      leaderboardModal.classList.add('hidden');
+    }
+
+    // Modals
+    const placementModal = document.getElementById('placement-modal');
+    const optOrder1Btn = document.getElementById('opt-order-1');
+    const optOrder2Btn = document.getElementById('opt-order-2');
+    const btnCancelPlacement = document.getElementById('btn-cancel-placement');
+    const opt1Val1 = document.getElementById('opt1-val1');
+    const opt1Val2 = document.getElementById('opt1-val2');
+    const opt2Val1 = document.getElementById('opt2-val1');
+    const opt2Val2 = document.getElementById('opt2-val2');
+
+    const gameoverModal = document.getElementById('gameover-modal');
+    const modalFinalScore = document.getElementById('modal-final-score');
+    const modalPlayerDisplay = document.getElementById('modal-player-display');
+    const btnModalRestart = document.getElementById('btn-modal-restart');
+    
+    const btnViewBoard = document.getElementById('btn-view-board');
+    const viewBoardBanner = document.getElementById('view-board-banner');
+    const btnReopenModal = document.getElementById('btn-reopen-modal');
+    const btnBannerRestart = document.getElementById('btn-banner-restart');
+
+    // Enlarged cell sizing classes
+    const CELL_SIZE_CLASSES = 'w-12 h-12 sm:w-16 sm:h-16 md:w-18 md:h-18 lg:w-20 lg:h-20';
+
+    function initBoardUI() {
+      boardContainerEl.innerHTML = '';
+
+      for (let r = 0; r < 4; r++) {
+        const rowDiv = document.createElement('div');
+        rowDiv.className = 'flex items-center justify-center gap-2 sm:gap-2.5 md:gap-3';
+
+        for (let c = 0; c < 6; c++) {
+          if (!LAYOUT_MASK[r][c]) {
+            // Placeholder for convex symmetry shape alignment
+            const placeholder = document.createElement('div');
+            placeholder.className = `${CELL_SIZE_CLASSES} opacity-0 pointer-events-none`;
+            if (c === 2) placeholder.classList.add('mr-4', 'sm:mr-6', 'md:mr-8');
+            rowDiv.appendChild(placeholder);
+            continue;
+          }
+
+          const cell = document.createElement('button');
+          cell.id = `cell-${r}-${c}`;
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+          const pairKey = getPairKey(r, c);
+          cell.dataset.pair = pairKey;
+
+          const val = boardState[r][c];
+          if (val !== null) {
+            cell.innerText = val;
+            cell.className = `board-cell ${CELL_SIZE_CLASSES} bg-indigo-50 border-2 md:border-3 border-indigo-600 rounded-xl font-black text-2xl sm:text-3xl md:text-4xl text-indigo-700 flex items-center justify-center cell-filled shadow-sm`;
+          } else {
+            cell.innerText = '';
+            cell.className = `board-cell ${CELL_SIZE_CLASSES} bg-white border-2 md:border-3 border-slate-300 rounded-xl font-bold text-slate-400 hover:border-indigo-400 hover:bg-indigo-50/30 transition-all flex items-center justify-center shadow-xs`;
+          }
+
+          if (c === 2) cell.classList.add('mr-4', 'sm:mr-6', 'md:mr-8');
+
+          cell.addEventListener('mouseenter', () => highlightPair(pairKey, true));
+          cell.addEventListener('mouseleave', () => highlightPair(pairKey, false));
+          cell.addEventListener('click', () => handleCellClick(r, c));
+
+          rowDiv.appendChild(cell);
+        }
+        boardContainerEl.appendChild(rowDiv);
+      }
+    }
+
+    // Render 3D Dots on Dice
+    function renderDiceFace(el, val) {
+      el.innerHTML = '';
+      if (val === '?' || !val) {
+        el.innerHTML = `<span class="text-2xl md:text-3xl font-black text-indigo-600">?</span>`;
+        return;
+      }
+
+      const grid = document.createElement('div');
+      grid.className = 'w-full h-full grid grid-cols-3 grid-rows-3 gap-0.5 pointer-events-none items-center justify-items-center';
+
+      const activeIndices = {
+        1: [4],       // Center (Red dot)
+        2: [2, 6],    // Top-right, bottom-left
+        3: [2, 4, 6]  // Top-right, center, bottom-left
+      }[val] || [];
+
+      for (let i = 0; i < 9; i++) {
+        const dotCell = document.createElement('div');
+        dotCell.className = 'w-full h-full flex items-center justify-center';
+        if (activeIndices.includes(i)) {
+          const dot = document.createElement('div');
+          const dotColor = val === 1 ? 'bg-rose-600 shadow-rose-200' : 'bg-slate-900 shadow-slate-200';
+          dot.className = `w-2.5 h-2.5 md:w-3.5 md:h-3.5 ${dotColor} rounded-full shadow-inner transition-all scale-100`;
+          dotCell.appendChild(dot);
+        }
+        grid.appendChild(dotCell);
+      }
+      el.appendChild(grid);
+    }
+
+    // Highlight Symmetrical Pair
+    function highlightPair(pairKey, isHover) {
+      if (!isDiceRolled) return;
+
+      const cells = document.querySelectorAll(`[data-pair="${pairKey}"]`);
+      cells.forEach(cell => {
+        const r = parseInt(cell.dataset.row);
+        const c = parseInt(cell.dataset.col);
+        if (boardState[r][c] === null) {
+          if (isHover) {
+            cell.classList.add('bg-indigo-100', 'border-indigo-600');
+          } else {
+            cell.classList.remove('bg-indigo-100', 'border-indigo-600');
+          }
+        }
+      });
+    }
+
+    function rollDice() {
+      if (currentRound > TOTAL_ROUNDS) {
+        openGameOverModal();
+        return;
+      }
+      if (isDiceRolled) return;
+
+      btnRoll.disabled = true;
+      btnRoll.classList.add('opacity-50', 'cursor-not-allowed');
+
+      dice1El.classList.add('dice-rolling');
+      dice2El.classList.add('dice-rolling');
+
+      const d1 = Math.floor(Math.random() * 3) + 1;
+      const d2 = Math.floor(Math.random() * 3) + 1;
+
+      let rolls = 0;
+      const interval = setInterval(() => {
+        const temp1 = Math.floor(Math.random() * 3) + 1;
+        const temp2 = Math.floor(Math.random() * 3) + 1;
+        renderDiceFace(dice1El, temp1);
+        renderDiceFace(dice2El, temp2);
+        rolls++;
+
+        if (rolls > 9) {
+          clearInterval(interval);
+          rolledDice = [d1, d2];
+          
+          dice1El.classList.remove('dice-rolling');
+          dice2El.classList.remove('dice-rolling');
+
+          renderDiceFace(dice1El, d1);
+          renderDiceFace(dice2El, d2);
+          
+          isDiceRolled = true;
+          statusHint.innerHTML = `<span class="text-indigo-600 font-bold">請點擊遊戲盤上任一對稱對</span> 來放置 [${d1}, ${d2}]`;
+        }
+      }, 70);
+    }
+
+    function handleCellClick(r, c) {
+      if (!isDiceRolled) {
+        statusHint.innerHTML = `<span class="text-rose-500 font-bold">請先點擊「擲骰子」！</span>`;
+        return;
+      }
+
+      if (boardState[r][c] !== null) {
+        statusHint.innerHTML = `<span class="text-rose-500 font-bold">此位置已填寫過，請選擇其他對稱組！</span>`;
+        return;
+      }
+
+      selectedPairKey = getPairKey(r, c);
+      openPlacementModal();
+    }
+
+    function openPlacementModal() {
+      const [d1, d2] = rolledDice;
+      
+      renderDiceFace(opt1Val1, d1);
+      renderDiceFace(opt1Val2, d2);
+
+      renderDiceFace(opt2Val1, d2);
+      renderDiceFace(opt2Val2, d1);
+
+      placementModal.classList.remove('hidden');
+    }
+
+    function closePlacementModal() {
+      placementModal.classList.add('hidden');
+      selectedPairKey = null;
+    }
+
+    function placeDice(leftVal, rightVal) {
+      if (!selectedPairKey) return;
+
+      const [rStr, minColStr] = selectedPairKey.split('-');
+      const r = parseInt(rStr);
+      const leftCol = parseInt(minColStr);
+      const rightCol = 5 - leftCol;
+
+      boardState[r][leftCol] = leftVal;
+      boardState[r][rightCol] = rightVal;
+
+      updateCellUI(r, leftCol, leftVal);
+      updateCellUI(r, rightCol, rightVal);
+
+      closePlacementModal();
+
+      currentRound++;
+      isDiceRolled = false;
+
+      if (currentRound <= TOTAL_ROUNDS) {
+        roundDisplay.innerText = `第 ${currentRound} / ${TOTAL_ROUNDS} 回合`;
+        renderDiceFace(dice1El, '?');
+        renderDiceFace(dice2El, '?');
+        btnRoll.disabled = false;
+        btnRoll.classList.remove('opacity-50', 'cursor-not-allowed');
+        statusHint.innerText = '請點擊「擲骰子」進行下一回合';
+      } else {
+        roundDisplay.innerText = `已完成 10 回合`;
+        statusHint.innerText = '遊戲結束！可點擊觀看盤面或查看結算';
+        btnRoll.innerHTML = '<i class="fa-solid fa-trophy"></i> 查看得分結算';
+        btnRoll.disabled = false;
+        btnRoll.classList.remove('opacity-50', 'cursor-not-allowed');
+        calculateScoreAndHighlight();
+      }
+    }
+
+    function updateCellUI(r, c, val) {
+      const cell = document.getElementById(`cell-${r}-${c}`);
+      cell.innerText = val;
+      cell.className = `board-cell ${CELL_SIZE_CLASSES} bg-indigo-50 border-2 md:border-3 border-indigo-600 rounded-xl font-black text-2xl sm:text-3xl md:text-4xl text-indigo-700 flex items-center justify-center cell-filled shadow-sm`;
+      if (c === 2) cell.classList.add('mr-4', 'sm:mr-6', 'md:mr-8');
+    }
+
+    function calculateScoreAndHighlight() {
+      const visited = Array.from({ length: 4 }, () => Array(6).fill(false));
+      const scores = { 1: { count: 0, score: 0 }, 2: { count: 0, score: 0 }, 3: { count: 0, score: 0 } };
+
+      const dr = [-1, 1, 0, 0];
+      const dc = [0, 0, -1, 1];
+
+      const validGroups = [];
+      const invalidGroups = [];
+
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 6; c++) {
+          if (LAYOUT_MASK[r][c] && !visited[r][c] && boardState[r][c] !== null) {
+            const targetVal = boardState[r][c];
+            const currentGroup = [];
+            const queue = [[r, c]];
+            visited[r][c] = true;
+
+            while (queue.length > 0) {
+              const [currR, currC] = queue.shift();
+              currentGroup.push([currR, currC]);
+
+              for (let i = 0; i < 4; i++) {
+                const nr = currR + dr[i];
+                const nc = currC + dc[i];
+
+                if (
+                  nr >= 0 && nr < 4 && nc >= 0 && nc < 6 &&
+                  LAYOUT_MASK[nr][nc] &&
+                  !visited[nr][nc] &&
+                  boardState[nr][nc] === targetVal
+                ) {
+                  visited[nr][nc] = true;
+                  queue.push([nr, nc]);
+                }
+              }
+            }
+
+            const groupSize = currentGroup.length;
+            if (groupSize === targetVal) {
+              if (scores[targetVal]) {
+                scores[targetVal].count += 1;
+                scores[targetVal].score += targetVal;
+              }
+              validGroups.push(currentGroup);
+            } else {
+              invalidGroups.push(currentGroup);
+            }
+          }
+        }
+      }
+
+      // Highlight Valid Scoring Groups (Green)
+      validGroups.forEach(group => {
+        group.forEach(([r, c]) => {
+          const cell = document.getElementById(`cell-${r}-${c}`);
+          cell.className = `board-cell ${CELL_SIZE_CLASSES} bg-emerald-100 border-2 md:border-3 border-emerald-600 rounded-xl font-black text-2xl sm:text-3xl md:text-4xl text-emerald-800 flex items-center justify-center shadow-md`;
+          if (c === 2) cell.classList.add('mr-4', 'sm:mr-6', 'md:mr-8');
+        });
+      });
+
+      // Highlight Invalid Groups (Red)
+      invalidGroups.forEach(group => {
+        group.forEach(([r, c]) => {
+          const cell = document.getElementById(`cell-${r}-${c}`);
+          cell.className = `board-cell ${CELL_SIZE_CLASSES} bg-rose-100 border-2 md:border-3 border-rose-400 rounded-xl font-black text-2xl sm:text-3xl md:text-4xl text-rose-500 flex items-center justify-center opacity-80 shadow-sm`;
+          if (c === 2) cell.classList.add('mr-4', 'sm:mr-6', 'md:mr-8');
+        });
+      });
+
+      // Update Score Table
+      let total = 0;
+      [1, 2, 3].forEach(num => {
+        const row = document.getElementById(`score-row-${num}`);
+        row.querySelector('.count-cell').innerText = scores[num].count;
+        row.querySelector('.score-cell').innerText = scores[num].score;
+        total += scores[num].score;
+      });
+
+      document.getElementById('total-score').innerText = total;
+      modalFinalScore.innerText = total;
+
+      const playerName = playerNameInput.value.trim() || '無名玩家';
+      modalPlayerDisplay.innerText = `玩家：${playerName}`;
+
+      // Save to Leaderboard & show rank badge if top 10
+      const rank = addScoreToLeaderboard(playerName, total);
+      if (rank !== null) {
+        modalRankBadge.classList.remove('hidden');
+        modalRankText.innerText = `榮登排行榜 第 ${rank} 名！`;
+      } else {
+        modalRankBadge.classList.add('hidden');
+      }
+
+      setTimeout(() => {
+        openGameOverModal();
+      }, 500);
+    }
+
+    function openGameOverModal() {
+      gameoverModal.classList.remove('hidden');
+      if (viewBoardBanner) viewBoardBanner.classList.add('hidden');
+    }
+
+    function viewBoard() {
+      gameoverModal.classList.add('hidden');
+      if (viewBoardBanner) viewBoardBanner.classList.remove('hidden');
+    }
+
+    function resetGame() {
+      currentRound = 1;
+      rolledDice = null;
+      isDiceRolled = false;
+      selectedPairKey = null;
+      boardState = Array.from({ length: 4 }, () => Array(6).fill(null));
+
+      roundDisplay.innerText = `第 1 / 10 回合`;
+      renderDiceFace(dice1El, '?');
+      renderDiceFace(dice2El, '?');
+      statusHint.innerText = '請點擊「擲骰子」開始回合';
+      btnRoll.innerHTML = '<i class="fa-solid fa-dice text-lg"></i> 擲骰子 (1~3點)';
+      btnRoll.disabled = false;
+      btnRoll.classList.remove('opacity-50', 'cursor-not-allowed');
+
+      [1, 2, 3].forEach(num => {
+        const row = document.getElementById(`score-row-${num}`);
+        row.querySelector('.count-cell').innerText = '-';
+        row.querySelector('.score-cell').innerText = '-';
+      });
+      document.getElementById('total-score').innerText = '-';
+
+      initBoardUI();
+      gameoverModal.classList.add('hidden');
+      if (viewBoardBanner) viewBoardBanner.classList.add('hidden');
+    }
+
+    // Attach Event Listeners
+    btnRoll.addEventListener('click', rollDice);
+    btnReset.addEventListener('click', resetGame);
+    btnModalRestart.addEventListener('click', resetGame);
+    btnViewBoard.addEventListener('click', viewBoard);
+    btnReopenModal.addEventListener('click', openGameOverModal);
+    btnBannerRestart.addEventListener('click', resetGame);
+
+    // Leaderboard Event Listeners
+    btnLeaderboard.addEventListener('click', openLeaderboardModal);
+    btnCloseLeaderboard.addEventListener('click', closeLeaderboardModal);
+    btnCloseLeaderboardFooter.addEventListener('click', closeLeaderboardModal);
+    btnModalLeaderboard.addEventListener('click', () => {
+      openLeaderboardModal();
+    });
+    btnClearLeaderboard.addEventListener('click', () => {
+      if (confirm('確定要清空所有歷史排行榜紀錄嗎？')) {
+        saveLeaderboard([]);
+        renderLeaderboardUI();
+      }
+    });
+
+    optOrder1Btn.addEventListener('click', () => {
+      placeDice(rolledDice[0], rolledDice[1]);
+    });
+
+    optOrder2Btn.addEventListener('click', () => {
+      placeDice(rolledDice[1], rolledDice[0]);
+    });
+
+    btnCancelPlacement.addEventListener('click', closePlacementModal);
+
+    // Initial Load
+    window.onload = () => {
+      initBoardUI();
+    };
+  </script>
+</body>
+</html>
