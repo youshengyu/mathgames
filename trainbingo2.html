@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>地鐵賓果 METRO BINGO - 松山新店線 20站版</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    window.FirebaseDB = { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, getFirestore, collection, addDoc, onSnapshot };
+  </script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;700;900&display=swap');
+
+    :root {
+      --bg-color: #061811;
+      --panel-bg: rgba(10, 31, 22, 0.9);
+      --line-green: #008659;
+      --line-light: #10b981;
+      --accent-amber: #f59e0b;
+      --text-main: #f0fdf4;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+    }
+
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background-color: var(--bg-color);
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.18) 0%, transparent 60%),
+        radial-gradient(circle at 80% 80%, rgba(52, 211, 153, 0.08) 0%, transparent 60%);
+      color: var(--text-main);
+      min-height: 100vh;
+    }
+
+    /* 擬真鋼軌與枕木 */
+    .track-line {
+      position: relative;
+      height: 12px;
+      background: linear-gradient(180deg, #64748b 0%, #1e293b 50%, #475569 100%);
+      border-top: 2px solid #cbd5e1;
+      border-bottom: 2px solid #94a3b8;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.6);
+    }
+
+    .track-line::before {
+      content: '';
+      position: absolute;
+      top: -3px; left: 0; right: 0; bottom: -3px;
+      background-image: repeating-linear-gradient(
+        90deg,
+        #061811 0px,
+        #061811 5px,
+        #78350f 5px,
+        #78350f 12px,
+        #061811 12px,
+        #061811 17px
+      );
+      z-index: 0;
+    }
+
+    /* 卡牌 3D 翻轉效果 */
+    .perspective-1000 {
+      perspective: 1000px;
+    }
+
+    .card-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+      transform-style: preserve-3d;
+    }
+
+    .card-inner.flipped {
+      transform: rotateY(180deg);
+    }
+
+    .card-front, .card-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      -webkit-backface-visibility: hidden;
+      backface-visibility: hidden;
+      border-radius: 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-back {
+      background: linear-gradient(135deg, #064e3b, #022c22);
+      border: 3px solid #047857;
+      box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.05);
+    }
+
+    .card-front {
+      background: linear-gradient(135deg, #047857, #061811);
+      border: 3px solid #10b981;
+      transform: rotateY(180deg);
+      box-shadow: 0 0 25px rgba(16, 185, 129, 0.4);
+    }
+
+    /* 車廂高亮互動動畫 */
+    .car-interactive {
+      animation: pulse-ring 1.5s infinite alternate;
+      cursor: pointer !important;
+    }
+
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 5px rgba(52, 211, 153, 0.4); border-color: #34d399; }
+      100% { box-shadow: 0 0 24px rgba(52, 211, 153, 0.95); border-color: #6ee7b7; transform: translateY(-2px); }
+    }
+
+    /* 車廂段落色彩 - 8 色循環 (帶有金屬質感) */
+    .segment-car-0 { border-color: #10b981 !important; background: linear-gradient(180deg, #064e3b 0%, #022c22 100%); }
+    .segment-car-1 { border-color: #3b82f6 !important; background: linear-gradient(180deg, #112347 0%, #1e3a8a 100%); }
+    .segment-car-2 { border-color: #f59e0b !important; background: linear-gradient(180deg, #3d1f08 0%, #78350f 100%); }
+    .segment-car-3 { border-color: #ec4899 !important; background: linear-gradient(180deg, #420a23 0%, #831843 100%); }
+    .segment-car-4 { border-color: #8b5cf6 !important; background: linear-gradient(180deg, #2a124d 0%, #4c1d95 100%); }
+    .segment-car-5 { border-color: #06b6d4 !important; background: linear-gradient(180deg, #083344 0%, #164e63 100%); }
+    .segment-car-6 { border-color: #ef4444 !important; background: linear-gradient(180deg, #371317 0%, #450a0a 100%); }
+    .segment-car-7 { border-color: #84cc16 !important; background: linear-gradient(180deg, #1a2e05 0%, #365314 100%); }
+
+    .segment-text-0 { color: #6ee7b7; }
+    .segment-text-1 { color: #93c5fd; }
+    .segment-text-2 { color: #fde047; }
+    .segment-text-3 { color: #f472b6; }
+    .segment-text-4 { color: #c4b5fd; }
+    .segment-text-5 { color: #67e8f9; }
+    .segment-text-6 { color: #fca5a5; }
+    .segment-text-7 { color: #bef264; }
+
+    .badge-seg-0 { background: #10b981; color: white; }
+    .badge-seg-1 { background: #3b82f6; color: white; }
+    .badge-seg-2 { background: #f59e0b; color: white; }
+    .badge-seg-3 { background: #ec4899; color: white; }
+    .badge-seg-4 { background: #8b5cf6; color: white; }
+    .badge-seg-5 { background: #06b6d4; color: white; }
+    .badge-seg-6 { background: #ef4444; color: white; }
+    .badge-seg-7 { background: #84cc16; color: white; }
+
+    /* 極致擬真台北捷運 C381 型 6 節綠線動畫列車 */
+    .bg-train-wrapper {
+      position: fixed;
+      top: 80px;
+      left: -1300px;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0.55;
+      animation: driveBgTrain 15s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      filter: drop-shadow(0 10px 15px rgba(0, 0, 0, 0.7));
+    }
+
+    @keyframes driveBgTrain {
+      0% { transform: translateX(0); }
+      38% { transform: translateX(calc(100vw + 1500px)); }
+      100% { transform: translateX(calc(100vw + 1500px)); }
+    }
+
+    .bg-train-track {
+      position: absolute;
+      bottom: -6px;
+      left: -200px;
+      right: -200px;
+      height: 4px;
+      background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.4), transparent);
+      border-top: 1px solid rgba(203, 213, 225, 0.3);
+    }
+
+    .bg-train-container {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      position: relative;
+    }
+
+    /* 車廂基本結構：金屬不銹鋼車體 + 綠線腰帶 */
+    .bg-train-car {
+      width: 140px;
+      height: 44px;
+      background: linear-gradient(180deg, #94a3b8 0%, #cbd5e1 18%, #64748b 38%, #008659 40%, #10b981 52%, #008659 55%, #334155 70%, #0f172a 100%);
+      border: 1.5px solid #cbd5e1;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px;
+      position: relative;
+      box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.4);
+    }
+
+    /* 車頂空調與集電棒裝備 */
+    .bg-train-car::before {
+      content: '';
+      position: absolute;
+      top: -5px;
+      left: 15px;
+      right: 15px;
+      height: 4px;
+      background: #475569;
+      border-radius: 3px 3px 0 0;
+      border-t: 1px solid #94a3b8;
+    }
+
+    /* 底盤鋼輪與轉向架 (Bogies) */
+    .bg-train-bogie-container {
+      position: absolute;
+      bottom: -7px;
+      left: 12px;
+      right: 12px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .bg-train-bogie {
+      width: 22px;
+      height: 6px;
+      background: #1e293b;
+      border: 1px solid #475569;
+      border-radius: 2px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 1px;
+    }
+
+    .bg-train-wheel {
+      width: 5px;
+      height: 5px;
+      background: #94a3b8;
+      border-radius: 50%;
+      border: 1px solid #0f172a;
+    }
+
+    /* 捷運自動門 */
+    .bg-train-door {
+      width: 16px;
+      height: 28px;
+      background: linear-gradient(180deg, #334155 0%, #1e293b 100%);
+      border: 1px solid #64748b;
+      border-radius: 2px;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      padding-top: 3px;
+    }
+
+    .bg-train-door::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 50%; bottom: 0;
+      width: 1px;
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    .bg-train-door-win {
+      width: 10px;
+      height: 10px;
+      background: rgba(167, 243, 208, 0.85);
+      border: 1px solid #047857;
+      border-radius: 1px;
+      box-shadow: 0 0 6px rgba(52, 211, 153, 0.6);
+    }
+
+    /* 乘客車窗 */
+    .bg-train-win {
+      width: 26px;
+      height: 16px;
+      background: linear-gradient(180deg, #a7f3d0 0%, #34d399 100%);
+      border: 1px solid #059669;
+      border-radius: 3px;
+      box-shadow: 0 0 10px rgba(52, 211, 153, 0.7);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bg-train-win::before {
+      content: '';
+      position: absolute;
+      top: 2px; left: 2px; right: 2px; height: 3px;
+      background: rgba(255, 255, 255, 0.6);
+      border-radius: 1px;
+    }
+
+    /* 車頭 (Driver Cab) 駕駛艙與擬真斜面造型 */
+    .bg-train-lead {
+      width: 160px;
+      border-top-right-radius: 26px 18px;
+      border-bottom-right-radius: 12px 6px;
+      background: linear-gradient(180deg, #cbd5e1 0%, #94a3b8 20%, #008659 40%, #10b981 53%, #008659 56%, #1e293b 85%, #0f172a 100%);
+      border-right: 3px solid #f1f5f9;
+      position: relative;
+    }
+
+    /* 車頭大弧形駕駛擋風玻璃 */
+    .bg-train-windshield {
+      position: absolute;
+      right: 6px;
+      top: 6px;
+      width: 42px;
+      height: 22px;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 70%, #047857 100%);
+      border: 1.5px solid #64748b;
+      border-radius: 4px 14px 4px 4px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding-top: 2px;
+      overflow: hidden;
+      box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.8);
+    }
+
+    /* LED 車頭終點顯示器 (Destination Display) */
+    .bg-train-dest {
+      background: #000;
+      color: #fde047;
+      font-size: 6px;
+      font-weight: 900;
+      padding: 0px 4px;
+      border-radius: 1px;
+      border: 1px solid #854d0e;
+      letter-spacing: 0.5px;
+      box-shadow: 0 0 4px #fde047;
+    }
+
+    /* 前照燈 (Headlights) & 照射光束 */
+    .bg-train-headlight {
+      position: absolute;
+      right: 2px;
+      bottom: 10px;
+      width: 6px;
+      height: 10px;
+      background: #fef08a;
+      border-radius: 2px;
+      box-shadow: 0 0 15px 5px rgba(254, 240, 138, 0.95);
+    }
+
+    .bg-train-beam {
+      position: absolute;
+      right: -120px;
+      bottom: -15px;
+      width: 140px;
+      height: 50px;
+      background: linear-gradient(90deg, rgba(254, 240, 138, 0.45) 0%, rgba(254, 240, 138, 0) 100%);
+      clip-path: polygon(0 30%, 100% 0, 100% 100%, 0 70%);
+      pointer-events: none;
+    }
+
+    /* 車尾尾燈 (Tail Cars & Red LED Taillights) */
+    .bg-train-tail {
+      border-top-left-radius: 20px 15px;
+      border-bottom-left-radius: 10px;
+      border-left: 3px solid #cbd5e1;
+    }
+
+    .bg-train-taillight {
+      position: absolute;
+      left: 3px;
+      bottom: 12px;
+      width: 4px;
+      height: 8px;
+      background: #ef4444;
+      border-radius: 1px;
+      box-shadow: 0 0 12px 4px rgba(239, 68, 68, 0.9);
+    }
+
+    /* 捷運細節特化樣式 */
+    .metro-stripe {
+      background: linear-gradient(90deg, #008659 0%, #10b981 50%, #008659 100%);
+    }
+
+    .metro-door-glass {
+      background: linear-gradient(180deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.9) 100%);
+      border: 1px solid rgba(52, 211, 153, 0.4);
+    }
+  </style>
+</head>
+<body class="pb-12 text-emerald-50">
+
+  <!-- 背景綠線捷運擬真穿梭動畫列車 (高規格台北捷運 C381 綠線樣式) -->
+  <div class="bg-train-wrapper">
+    <div class="bg-train-container">
+      
+      <!-- 車尾 (G01 新店端車頭/車尾) -->
+      <div class="bg-train-car bg-train-tail">
+        <div class="bg-train-taillight"></div>
+        <div class="bg-train-door"><div class="bg-train-door-win"></div></div>
+        <div class="bg-train-win"></div>
+        <div class="bg-train-door"><div class="bg-train-door-win"></div></div>
+        <div class="bg-train-bogie-container">
+          <div class="bg-train-bogie"><div class="bg-train-wheel"></div><div class="bg-train-wheel"></div></div>
+          <div class="bg-train-bogie"><div class="bg-train-wheel"></div><div class="bg-train-wheel"></div></div>
+        </div>
+      </div>
+
+      <!-- 車廂 2 -->
+      <div class="bg-train-car">
+        <div class="bg-train-door"><div class="bg-train-door-win"></div></div>
+        <div class="bg-train-win"></div>
+        <div class="bg-train-door"><div class="bg-train-door-win"></div></div>
+        <div class="bg-train-bogie-container">
+          <div class="bg-train-bogie"><div class="bg-train-wheel"></div><div class="bg-train-wheel"></div></div>
+          <div class="bg-train-bogie"><div class="bg-train-wheel"></div><div class="bg-train-wheel"></div></div>
+        </div>
+      </div>
+
+      <!-- 車廂 3 -->
+      <div class="bg-train-car">
+        <div class="bg-train-door"><div class="bg-train-door-win"></div></div>
+        <div class="bg-train-win"></div>
+        <div class="bg-train-door"><div class="bg-train-door-win"></div></div>
+        <div class="bg-train-bogie-container">
+          <div class="bg-train-bogie"><div class="bg-train-wheel"></div><div class="bg-train-wheel"></div></div>
+          <div class="bg-train-bogie"><div class="bg-train-wheel"></div><div class="bg-train-wheel"></div></div>
+        </div>
+      </div>
+
+      <!-- 車廂 4 -->
+      <div class="bg-train-car">
+        <div class="bg-train-door"><div class="bg-train-door-win"></div></div>
+        <div class="bg-train-win"></div>
+        <div class="bg-train-door"><div class="bg-train-door-win"></div></div>
+        <div class="bg-train-bogie-container">
+          <div class="bg-train-bogie"><div class="bg-train-wheel"></div><div class="bg-train-wheel"></div></div>
+          <div class="bg-train-bogie"><div class="bg-train-wheel"></div><div class="bg-train-wheel"></div></div>
+        </div>
+      </div>
+
+      <!-- 車廂 5 -->
+      <div class="bg-train-car">
+        <div class="bg-train-door"><div class="bg-train-door-win"></div></div>
+        <div class="bg-train-win"></div>
+        <div class="bg-train-door"><div class="bg-train-door-win"></div></div>
+        <div class="bg-train-bogie-container">
+          <div class="bg-train-bogie"><div class="bg-train-wheel"></div><div class="bg-train-wheel"></div></div>
+          <div class="bg-train-bogie"><div class="bg-train-wheel"></div><div class="bg-train-wheel"></div></div>
+        </div>
+      </div>
+
+      <!-- 車頭 (G19 松山端駕駛艙) -->
+      <div class="bg-train-car bg-train-lead">
+        <div class="bg-train-door"><div class="bg-train-door-win"></div></div>
+        <div class="bg-train-win"></div>
+        <div class="bg-train-windshield">
+          <div class="bg-train-dest">G19 松山</div>
+        </div>
+        <div class="bg-train-headlight"></div>
+        <div class="bg-train-beam"></div>
+        <div class="bg-train-bogie-container">
+          <div class="bg-train-bogie"><div class="bg-train-wheel"></div><div class="bg-train-wheel"></div></div>
+          <div class="bg-train-bogie"><div class="bg-train-wheel"></div><div class="bg-train-wheel"></div></div>
+        </div>
+      </div>
+
+    </div>
+    <div class="bg-train-track"></div>
+  </div>
+
+  <!-- Header -->
+  <header class="bg-slate-900/90 border-b border-emerald-900/60 sticky top-0 z-50 backdrop-blur shadow-lg shadow-black/50">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center flex-wrap gap-2">
+      <div class="flex items-center space-x-3">
+        <div class="bg-emerald-600 text-white p-2.5 rounded-xl font-black text-xl flex items-center justify-center shadow-lg shadow-emerald-600/30">
+          <i class="fa-solid fa-train-subway"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-2xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-green-400">
+              松山新店線
+            </h1>
+          </div>
+          <p class="text-xs text-slate-400 font-medium">20 站擬真地鐵車廂版 • 點擊抽牌放置遊戲</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2.5">
+        <!-- 玩家姓名輸入區 -->
+        <div class="flex items-center bg-slate-800/90 border border-emerald-700/60 rounded-xl px-3 py-1.5 shadow-inner">
+          <i class="fa-solid fa-user-gear text-emerald-400 text-xs mr-2"></i>
+          <span class="text-xs text-slate-400 mr-1.5 hidden sm:inline">列車長:</span>
+          <input type="text" id="playerNameInput" value="松山車長" maxlength="12" class="bg-transparent text-emerald-200 text-xs font-bold focus:outline-none w-24 sm:w-28 placeholder-slate-500" placeholder="輸入姓名" onchange="updatePlayerName()">
+        </div>
+
+        <!-- 查看排行榜按鈕 -->
+        <button onclick="toggleLeaderboardModal(true)" class="bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/50 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 shadow">
+          <i class="fa-solid fa-trophy text-amber-400"></i> 排行榜
+        </button>
+
+        <button onclick="resetGame()" class="bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-900/80 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition active:scale-95 shadow">
+          <i class="fa-solid fa-rotate-right"></i> <span class="hidden sm:inline">重新開始</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Layout -->
+  <main class="max-w-7xl mx-auto px-4 mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- Left Column: Card Draw Deck & Tracker -->
+    <section class="lg:col-span-1 space-y-6">
+
+      <!-- 發牌感應機匣 -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col items-center">
+        <div class="text-xs font-bold text-slate-400 tracking-wider uppercase mb-3 flex items-center gap-2">
+          <i class="fa-solid fa-ticket text-emerald-400"></i> 發牌感應機匣 (點擊抽牌)
+        </div>
+
+        <!-- 可點擊抽牌卡片容器 -->
+        <div class="w-40 h-56 my-2 perspective-1000 cursor-pointer" id="cardContainer" onclick="handleCardClick()">
+          <div class="card-inner" id="cardInner">
+            
+            <!-- 卡片背面 -->
+            <div class="card-back border-2 border-emerald-800 hover:border-emerald-500/80 transition">
+              <div class="w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center mb-3 shadow-inner border border-emerald-800">
+                <i class="fa-solid fa-subway text-2xl text-emerald-400"></i>
+              </div>
+              <span class="text-sm font-bold text-emerald-200 tracking-wider">點擊抽取</span>
+              <span class="text-[10px] text-emerald-500/80 mt-1 uppercase">TAP TO DRAW</span>
+            </div>
+
+            <!-- 卡片正面 -->
+            <div class="card-front">
+              <span class="text-[10px] font-bold text-emerald-300 tracking-widest uppercase">CARD NO.</span>
+              <div class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-amber-300 my-1" id="cardNumDisplay">?</div>
+              <div class="text-[10px] text-emerald-200 bg-emerald-950/80 px-2.5 py-0.5 rounded border border-emerald-700/50">
+                點擊亮起車廂填入
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 抽牌按鈕 -->
+        <button id="drawBtn" onclick="handleCardClick()" class="w-full mt-3 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-emerald-600/20 active:scale-95 transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-hand-pointer"></i> 抽取號碼牌
+        </button>
+
+        <!-- 狀態資訊 -->
+        <div class="w-full space-y-2 mt-4 text-xs">
+          <div class="flex justify-between items-center bg-slate-950/60 px-3 py-2 rounded-xl border border-slate-800">
+            <span class="text-slate-400">已填入車廂</span>
+            <span class="font-bold text-slate-100 text-sm"><span id="filledCount">0</span> / 20 站</span>
+          </div>
+          <div class="flex justify-between items-center bg-slate-950/60 px-3 py-2 rounded-xl border border-slate-800">
+            <span class="text-slate-400">牌庫剩餘</span>
+            <span class="font-bold text-amber-400 text-sm"><span id="deckRemaining">40</span> 張</span>
+          </div>
+          <p id="actionHint" class="text-center text-xs text-amber-400 font-medium h-5 pt-1">請點擊上方卡匣或按鈕抽牌</p>
+        </div>
+      </div>
+
+      <!-- 牌池剩餘牌卡監控 (1~30) -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl">
+        <h3 class="text-xs font-bold text-slate-400 tracking-wider uppercase mb-3 flex items-center justify-between">
+          <span class="flex items-center gap-2"><i class="fa-solid fa-layer-group text-emerald-400"></i> 牌池剩餘牌卡監控 (1~30)</span>
+          <span class="text-[10px] text-slate-500">共 40 張牌</span>
+        </h3>
+        <div id="deckTracker" class="grid grid-cols-6 gap-1.5 text-center"></div>
+      </div>
+
+      <!-- 分數對照表 (20 站版) -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl">
+        <h3 class="text-xs font-bold text-slate-400 tracking-wider uppercase mb-3 flex items-center gap-2">
+          <i class="fa-solid fa-award text-amber-400"></i> 20 站列車長度分數對照表
+        </h3>
+        <div class="grid grid-cols-5 gap-1.5 text-center text-[11px] max-h-56 overflow-y-auto pr-1">
+          <div class="bg-slate-800/60 p-1.5 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">1站</span><span class="font-bold text-slate-200">+0</span></div>
+          <div class="bg-slate-800/60 p-1.5 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">2站</span><span class="font-bold text-slate-200">+3</span></div>
+          <div class="bg-slate-800/60 p-1.5 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">3站</span><span class="font-bold text-slate-200">+8</span></div>
+          <div class="bg-slate-800/60 p-1.5 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">4站</span><span class="font-bold text-slate-200">+15</span></div>
+          <div class="bg-slate-800/60 p-1.5 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">5站</span><span class="font-bold text-slate-200">+25</span></div>
+          <div class="bg-slate-800/60 p-1.5 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">6站</span><span class="font-bold text-slate-200">+35</span></div>
+          <div class="bg-slate-800/60 p-1.5 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">7站</span><span class="font-bold text-slate-200">+50</span></div>
+          <div class="bg-slate-800/60 p-1.5 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">8站</span><span class="font-bold text-slate-200">+65</span></div>
+          <div class="bg-slate-800/60 p-1.5 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">9站</span><span class="font-bold text-slate-200">+80</span></div>
+          <div class="bg-slate-800/60 p-1.5 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">10站</span><span class="font-bold text-slate-200">+100</span></div>
+          <div class="bg-slate-800/60 p-1.5 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">11站</span><span class="font-bold text-slate-200">+120</span></div>
+          <div class="bg-slate-800/60 p-1.5 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">12站</span><span class="font-bold text-slate-200">+140</span></div>
+          <div class="bg-slate-800/60 p-1.5 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">13站</span><span class="font-bold text-slate-200">+165</span></div>
+          <div class="bg-slate-800/60 p-1.5 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">14站</span><span class="font-bold text-slate-200">+190</span></div>
+          <div class="bg-slate-800/60 p-1.5 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">15站</span><span class="font-bold text-slate-200">+220</span></div>
+          <div class="bg-slate-800/60 p-1.5 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">16站</span><span class="font-bold text-slate-200">+250</span></div>
+          <div class="bg-slate-800/60 p-1.5 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">17站</span><span class="font-bold text-slate-200">+285</span></div>
+          <div class="bg-slate-800/60 p-1.5 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">18站</span><span class="font-bold text-slate-200">+320</span></div>
+          <div class="bg-slate-800/60 p-1.5 rounded border border-slate-700/50"><span class="text-slate-400 block text-[9px]">19站</span><span class="font-bold text-slate-200">+360</span></div>
+          <div class="bg-slate-800/60 p-1.5 rounded border border-emerald-500/80 bg-emerald-950/40"><span class="text-emerald-300 block text-[9px]">20站</span><span class="font-bold text-amber-400">+400</span></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Right Column: Metro Route & Score Segment Breakdown -->
+    <section class="lg:col-span-2 space-y-6">
+
+      <!-- 遊戲完成 Banner -->
+      <div id="gameOverBanner" class="hidden bg-gradient-to-r from-emerald-600 to-teal-700 text-white p-6 rounded-2xl text-center shadow-xl shadow-emerald-600/30">
+        <h3 class="text-2xl font-black mb-1 flex items-center justify-center gap-2">
+          <i class="fa-solid fa-trophy text-amber-300"></i> 松山新店線 20 站全線完工通車！
+        </h3>
+        <p class="text-sm opacity-90 mt-1">恭喜完成綠線全區段營運！最終總得分：<span id="finalScore" class="text-3xl font-black text-amber-300">0</span> 分！</p>
+      </div>
+
+      <!-- 20 站擬真地鐵車廂路線圖 -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-6 pb-4 border-b border-slate-800">
+          <div>
+            <h2 class="text-lg font-black text-emerald-400 flex items-center gap-2">
+              <i class="fa-solid fa-route"></i> 松山新店線 Songshan-Xindian Line
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">20 站擬真地鐵車廂 (含車頭駕駛艙、門縫、雙車門與轉向架鋼輪)</p>
+          </div>
+          <div class="text-xs bg-slate-800/80 text-emerald-300 px-3 py-1.5 rounded-xl border border-slate-700 flex items-center gap-2 self-start sm:self-auto">
+            <i class="fa-solid fa-circle-info text-emerald-400"></i>
+            <span>規則：數字大於等於上一站延續，變小斷開</span>
+          </div>
+        </div>
+
+        <!-- 20 車廂網格容器 -->
+        <div id="trainGrid" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-y-10 gap-x-3"></div>
+      </div>
+
+      <!-- 得分明細與統計 -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        <div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-800">
+          <div>
+            <h3 class="text-sm font-bold text-slate-200">列車段結算明細</h3>
+            <p class="text-xs text-slate-500">即時計算綠線各連續列車長度加分</p>
+          </div>
+          <div class="text-right">
+            <span class="text-xs text-slate-400 block">當前路線總分</span>
+            <span id="totalScore" class="text-3xl font-black text-amber-400">0 <span class="text-sm font-normal text-slate-400">分</span></span>
+          </div>
+        </div>
+
+        <div id="segmentList" class="space-y-2 max-h-64 overflow-y-auto pr-1">
+          <p class="text-center text-slate-500 text-xs py-4">點擊抽牌並放置數字後，將在此呈現結算段落...</p>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- 榮譽排行榜 Modal -->
+  <div id="leaderboardModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-emerald-600/50 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative flex flex-col max-h-[85vh]">
+      <button onclick="toggleLeaderboardModal(false)" class="absolute top-4 right-4 text-slate-400 hover:text-white text-xl">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div class="flex items-center gap-3 mb-4 pb-3 border-b border-slate-800">
+        <div class="bg-amber-500/20 p-3 rounded-xl border border-amber-500/40 text-amber-400">
+          <i class="fa-solid fa-trophy text-2xl"></i>
+        </div>
+        <div>
+          <h2 class="text-lg font-black text-amber-300">松山新店線 榮譽排行榜 TOP 10</h2>
+          <p class="text-xs text-slate-400">紀錄綠線全線完工最高得分列車長</p>
+        </div>
+      </div>
+
+      <!-- 排行榜列表 -->
+      <div class="overflow-y-auto flex-1 space-y-2 pr-1" id="leaderboardList">
+        <div class="text-center text-slate-500 text-xs py-8">載入排行榜資料中...</div>
+      </div>
+
+      <div class="mt-4 pt-3 border-t border-slate-800 flex justify-between items-center text-xs text-slate-400">
+        <span>完成 19 站即可自動上榜！</span>
+        <button onclick="toggleLeaderboardModal(false)" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl font-bold transition">
+          關閉
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 松山新店線 (G01 新店 ~ G19 松山，包含 G03A 小碧潭，共 20 站)
+    const STATIONS = [
+      { code: "G01", name: "新店", en: "Xindian" },
+      { code: "G02", name: "新店區公所", en: "Xindian District Office" },
+      { code: "G03A", name: "小碧潭", en: "Xiaobitan" },
+      { code: "G03", name: "七張", en: "Qizhang" },
+      { code: "G04", name: "大坪林", en: "Dapinglin" },
+      { code: "G05", name: "景美", en: "Jingmei" },
+      { code: "G06", name: "萬隆", en: "Wanlong" },
+      { code: "G07", name: "公館", en: "Gongguan" },
+      { code: "G08", name: "台電大樓", en: "Taipower Building" },
+      { code: "G09", name: "古亭", en: "Guting" },
+      { code: "G10", name: "中正紀念堂", en: "C.K.S. Mem. Hall" },
+      { code: "G11", name: "小南門", en: "Xiaonanmen" },
+      { code: "G12", name: "西門", en: "Ximen" },
+      { code: "G13", name: "北門", en: "Beimen" },
+      { code: "G14", name: "中山", en: "Zhongshan" },
+      { code: "G15", name: "松江南京", en: "Songjiang Nanjing" },
+      { code: "G16", name: "南京復興", en: "Nanjing Fuxing" },
+      { code: "G17", name: "台北小巨蛋", en: "Taipei Arena" },
+      { code: "G18", name: "南京三民", en: "Nanjing Sanmin" },
+      { code: "G19", name: "松山", en: "Songshan" }
+    ];
+
+    // 20 站分數對照表
+    const SCORE_TABLE = { 
+      0:0, 1:0, 2:3, 3:8, 4:15, 5:25, 6:35, 7:50, 8:65, 9:80, 10:100,
+      11:120, 12:140, 13:165, 14:190, 15:220, 16:250, 17:285, 18:320, 19:360, 20:400
+    };
+
+    let deck = [];
+    let currentDrawnCard = null;
+    let board = new Array(STATIONS.length).fill(null);
+    let isDrawing = false;
+
+    let playerName = localStorage.getItem("metroBingo_playerName") || "松山車長";
+    let leaderboardData = [];
+    let db = null;
+    let auth = null;
+    let user = null;
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'metro-bingo-19';
+
+    // 本地備用排行榜
+    let localLeaderboard = [];
+
+    function updatePlayerName() {
+      const input = document.getElementById("playerNameInput");
+      if (input && input.value.trim() !== "") {
+        playerName = input.value.trim();
+        try { localStorage.setItem("metroBingo_playerName", playerName); } catch(e){}
+      }
+    }
+
+    async function initFirebaseLeaderboard() {
+      if (window.FirebaseDB && typeof __firebase_config !== 'undefined') {
+        try {
+          const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, getFirestore, collection, onSnapshot } = window.FirebaseDB;
+          const firebaseConfig = JSON.parse(__firebase_config);
+          const app = initializeApp(firebaseConfig);
+          auth = getAuth(app);
+          db = getFirestore(app);
+
+          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            const userCred = await signInWithCustomToken(auth, __initial_auth_token);
+            user = userCred.user;
+          } else {
+            const userCred = await signInAnonymously(auth);
+            user = userCred.user;
+          }
+
+          if (user) {
+            const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'leaderboard');
+            onSnapshot(colRef, (snapshot) => {
+              const list = [];
+              snapshot.forEach((doc) => list.push(doc.data()));
+              leaderboardData = list;
+              renderLeaderboard(leaderboardData);
+            }, (error) => {
+              console.warn("Error listening to leaderboard:", error);
+              renderLeaderboard(localLeaderboard);
+            });
+          } else {
+            renderLeaderboard(localLeaderboard);
+          }
+        } catch (e) {
+          console.warn("Firebase setup error:", e);
+          renderLeaderboard(localLeaderboard);
+        }
+      } else {
+        renderLeaderboard(localLeaderboard);
+      }
+    }
+
+    async function submitScoreToLeaderboard(score) {
+      updatePlayerName();
+      const newEntry = {
+        name: playerName,
+        score: score,
+        date: new Date().toISOString().split('T')[0],
+        timestamp: Date.now()
+      };
+
+      if (db && user && window.FirebaseDB) {
+        try {
+          const { collection, addDoc } = window.FirebaseDB;
+          const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'leaderboard');
+          await addDoc(colRef, newEntry);
+        } catch (e) {
+          console.warn("Failed to save score online, fallback local:", e);
+          localLeaderboard.push(newEntry);
+          renderLeaderboard(localLeaderboard);
+        }
+      } else {
+        localLeaderboard.push(newEntry);
+        renderLeaderboard(localLeaderboard);
+      }
+    }
+
+    function renderLeaderboard(data) {
+      const container = document.getElementById("leaderboardList");
+      if (!container) return;
+
+      const sorted = [...data].sort((a, b) => b.score - a.score).slice(0, 10);
+
+      if (sorted.length === 0) {
+        container.innerHTML = `<div class="text-center text-slate-500 text-xs py-8">目前尚無榜單紀錄<br/><span class="text-emerald-400 font-bold mt-1 block">完成 19 站全線通車，成為第一個上榜的列車長吧！</span></div>`;
+        return;
+      }
+
+      container.innerHTML = "";
+      sorted.forEach((item, index) => {
+        const rank = index + 1;
+        let badgeStyle = "bg-slate-800/90 border-slate-700/80 text-slate-300";
+        let rankIcon = `<span class="font-bold text-xs">${rank}</span>`;
+
+        if (rank === 1) {
+          badgeStyle = "bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-md shadow-amber-500/10";
+          rankIcon = `<i class="fa-solid fa-crown text-amber-400"></i>`;
+        } else if (rank === 2) {
+          badgeStyle = "bg-slate-300/20 border-slate-300/60 text-slate-200";
+          rankIcon = `<i class="fa-solid fa-medal text-slate-300"></i>`;
+        } else if (rank === 3) {
+          badgeStyle = "bg-amber-700/20 border-amber-700/60 text-amber-500";
+          rankIcon = `<i class="fa-solid fa-award text-amber-600"></i>`;
+        }
+
+        const isCurrentPlayer = item.name === playerName && item.score === parseInt(document.getElementById("finalScore")?.textContent || -1);
+
+        const row = document.createElement("div");
+        row.className = `flex items-center justify-between p-3 rounded-xl border text-xs transition ${badgeStyle} ${isCurrentPlayer ? 'ring-2 ring-emerald-400' : ''}`;
+
+        row.innerHTML = `
+          <div class="flex items-center gap-3">
+            <div class="w-7 h-7 rounded-lg flex items-center justify-center font-black bg-black/40 border border-slate-700 shrink-0">
+              ${rankIcon}
+            </div>
+            <div>
+              <div class="font-bold text-slate-100 flex items-center gap-1.5">
+                ${item.name}
+                ${isCurrentPlayer ? '<span class="bg-emerald-500/20 text-emerald-300 text-[9px] px-1.5 py-0.2 rounded border border-emerald-500/40">本次記錄</span>' : ''}
+              </div>
+              <div class="text-[10px] text-slate-400">${item.date || ''}</div>
+            </div>
+          </div>
+          <div class="text-right">
+            <span class="text-base font-black text-amber-400">${item.score}</span>
+            <span class="text-[10px] text-slate-400 block">分</span>
+          </div>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function toggleLeaderboardModal(show) {
+      const modal = document.getElementById("leaderboardModal");
+      if (modal) {
+        if (show) modal.classList.remove("hidden");
+        else modal.classList.add("hidden");
+      }
+    }
+
+    const cardInner = document.getElementById("cardInner");
+    const drawBtn = document.getElementById("drawBtn");
+
+    // Web Audio 音效引擎
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playTone(freq, type = 'sine', duration = 0.15) {
+      try {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    // 建立卡牌牌庫 (11~20 各 2 張，其餘 1~10 與 21~30 各 1 張，共 40 張)
+    function buildDeck() {
+      deck = [];
+      for (let i = 1; i <= 30; i++) {
+        if (i >= 11 && i <= 20) {
+          deck.push(i, i);
+        } else {
+          deck.push(i);
+        }
+      }
+    }
+
+    function initGame() {
+      buildDeck();
+      board = new Array(STATIONS.length).fill(null);
+      currentDrawnCard = null;
+      isDrawing = false;
+
+      cardInner.classList.remove("flipped");
+      drawBtn.disabled = false;
+      drawBtn.innerHTML = `<i class="fa-solid fa-hand-pointer"></i> 抽取號碼牌`;
+      document.getElementById("gameOverBanner").classList.add("hidden");
+      document.getElementById("actionHint").textContent = "請點擊上方卡匣或按鈕抽牌";
+
+      renderTracker();
+      renderBoard();
+      updateScoreAndSegments();
+    }
+
+    // 點擊抽牌邏輯
+    function handleCardClick() {
+      if (isDrawing) {
+        document.getElementById("actionHint").textContent = "請先點擊閃爍亮起車廂填入數字！";
+        return;
+      }
+
+      if (deck.length === 0) {
+        document.getElementById("actionHint").textContent = "牌庫已耗盡！";
+        return;
+      }
+
+      const randomIndex = Math.floor(Math.random() * deck.length);
+      currentDrawnCard = deck.splice(randomIndex, 1)[0];
+      isDrawing = true;
+
+      playTone(523.25, 'triangle', 0.15); // C5 Sound
+
+      document.getElementById("cardNumDisplay").textContent = currentDrawnCard;
+      cardInner.classList.add("flipped");
+
+      drawBtn.disabled = true;
+      drawBtn.innerHTML = `<i class="fa-solid fa-hourglass-half"></i> 請放置卡牌`;
+      document.getElementById("actionHint").textContent = "請點擊閃爍車廂填入數字！";
+
+      renderTracker();
+      renderBoard();
+    }
+
+    function renderTracker() {
+      const counts = {};
+      for (let i = 1; i <= 30; i++) counts[i] = 0;
+      deck.forEach(num => counts[num]++);
+
+      const grid = document.getElementById("deckTracker");
+      grid.innerHTML = "";
+
+      for (let i = 1; i <= 30; i++) {
+        const remaining = counts[i];
+        const chip = document.createElement("div");
+        
+        let bgStyle = "bg-slate-800/80 border-slate-700 text-slate-400";
+        if (remaining === 2) bgStyle = "bg-emerald-950/70 border-emerald-600/70 text-emerald-300 font-bold";
+        else if (remaining === 1) bgStyle = "bg-teal-950/60 border-teal-600/60 text-teal-300 font-bold";
+        else bgStyle = "bg-slate-900/40 border-slate-800/60 text-slate-600 opacity-40";
+
+        chip.className = `p-1 rounded-lg border text-[10px] flex flex-col justify-between items-center ${bgStyle}`;
+        chip.innerHTML = `
+          <span>${i}</span>
+          <span class="text-[9px] font-black">${remaining}張</span>
+        `;
+        grid.appendChild(chip);
+      }
+
+      document.getElementById("deckRemaining").textContent = deck.length;
+    }
+
+    // 渲染 20 個擬真捷運車廂
+    function renderBoard() {
+      const gridContainer = document.getElementById("trainGrid");
+      gridContainer.innerHTML = "";
+
+      const filled = board.filter(v => v !== null).length;
+      document.getElementById("filledCount").textContent = filled;
+
+      const segments = calculateSegments();
+
+      STATIONS.forEach((stationObj, idx) => {
+        const val = board[idx];
+        const isInteractive = isDrawing && val === null;
+
+        let segIdx = -1;
+        if (val !== null) {
+          segIdx = segments.findIndex(s => s.indices.includes(idx));
+        }
+
+        const isFirstCar = (idx === 0);                   // 首站 G01 新店：車頭駕駛艙
+        const isLastCar = (idx === STATIONS.length - 1);  // 終站 G19 松山：車尾尾燈艙
+
+        const carWrapper = document.createElement("div");
+        carWrapper.className = "flex flex-col items-center justify-center relative";
+
+        let carBgClass = "bg-slate-800/90 border-slate-600 text-slate-200";
+        if (segIdx !== -1) {
+          carBgClass = `segment-car-${segIdx % 8} border-2 text-white shadow-lg`;
+        }
+
+        // 車頭形狀特化
+        let headerShape = "rounded-xl";
+        if (isFirstCar) headerShape = "rounded-l-3xl rounded-r-xl border-l-4 border-l-emerald-400";
+        if (isLastCar) headerShape = "rounded-r-3xl rounded-l-xl border-r-4 border-r-emerald-400";
+
+        carWrapper.innerHTML = `
+          <!-- 站號與段落標籤 -->
+          <div class="text-[10px] font-bold text-slate-400 mb-1 flex justify-between items-center w-full px-1">
+            <span class="text-emerald-400 font-extrabold flex items-center gap-1">
+              ${isFirstCar ? '<i class="fa-solid fa-dharmachakra text-amber-400 animate-spin"></i> [起點]' : ''}
+              ${stationObj.code}
+              ${isLastCar ? '[終點]' : ''}
+            </span>
+            ${segIdx !== -1 ? `<span class="badge-seg-${segIdx % 8} px-1.5 py-0.2 rounded text-[8px] font-black">段${segIdx + 1}</span>` : ''}
+          </div>
+
+          <!-- 車頂空調 HVAC 裝置 (擬真空調散熱孔) -->
+          <div class="w-20 h-1.5 bg-slate-700/80 rounded-t-sm border-t border-slate-500 flex justify-evenly items-center px-1 mb-[1px]">
+            <div class="w-3 h-[2px] bg-slate-900 rounded-full"></div>
+            <div class="w-3 h-[2px] bg-slate-900 rounded-full"></div>
+            <div class="w-3 h-[2px] bg-slate-900 rounded-full"></div>
+          </div>
+
+          <!-- 車廂主體 (含擬真地鐵結構: 車頭/車門/車窗/綠線腰帶) -->
+          <div class="w-full h-28 ${headerShape} flex flex-col justify-between p-1.5 transition-all duration-200 relative border-2 ${carBgClass} ${isInteractive ? 'car-interactive' : ''}">
+            
+            <!-- 頂部: 站車編號與車燈/顯示屏 -->
+            <div class="flex justify-between items-center w-full px-1">
+              ${isFirstCar 
+                ? `<div class="flex items-center gap-1 bg-black/80 px-1.5 py-0.5 rounded border border-emerald-500/60">
+                     <div class="w-2 h-2 rounded-full bg-amber-300 shadow-[0_0_8px_#fde047] animate-ping"></div>
+                     <span class="text-[8px] font-black text-emerald-300">G19松山</span>
+                   </div>`
+                : `<div class="w-2 h-1 bg-amber-300 rounded-full shadow-sm"></div>`
+              }
+
+              <div class="text-[8px] font-mono text-slate-300 font-extrabold tracking-tight bg-slate-950/60 px-1 rounded border border-slate-700">
+                CAR ${idx+1}
+              </div>
+
+              ${isLastCar 
+                ? `<div class="flex items-center gap-1 bg-black/80 px-1.5 py-0.5 rounded border border-red-500/60">
+                     <span class="text-[8px] font-black text-red-400">尾燈</span>
+                     <div class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]"></div>
+                   </div>`
+                : `<div class="w-2 h-1 bg-amber-300 rounded-full shadow-sm"></div>`
+              }
+            </div>
+
+            <!-- 車廂中部: 雙車門 + 中央乘客車窗數字區 -->
+            <div class="flex items-center justify-between gap-1 my-0.5">
+              
+              <!-- 左側滑開式車門 -->
+              <div class="w-4 h-12 bg-slate-900/90 border border-slate-700 rounded flex flex-col justify-between p-[1px] relative shrink-0 shadow-inner">
+                <div class="w-full h-4 metro-door-glass rounded-[1px]"></div>
+                <div class="w-full h-5 bg-slate-800 border-t border-slate-700 rounded-[1px]"></div>
+                <div class="absolute inset-y-0 left-1/2 w-[1px] bg-slate-700/80"></div>
+              </div>
+
+              <!-- 中央車窗 (放置數字) -->
+              <div class="flex-1 bg-black/75 border border-slate-700/90 rounded-lg h-12 flex items-center justify-center shadow-inner relative overflow-hidden">
+                ${val !== null 
+                  ? `<span class="text-2xl font-black ${segIdx !== -1 ? 'segment-text-' + (segIdx % 8) : 'text-white'}">${val}</span>` 
+                  : `<span class="text-slate-500 text-[11px] font-bold">${isInteractive ? '放置' : '空'}</span>`
+                }
+              </div>
+
+              <!-- 右側滑開式車門 -->
+              <div class="w-4 h-12 bg-slate-900/90 border border-slate-700 rounded flex flex-col justify-between p-[1px] relative shrink-0 shadow-inner">
+                <div class="w-full h-4 metro-door-glass rounded-[1px]"></div>
+                <div class="w-full h-5 bg-slate-800 border-t border-slate-700 rounded-[1px]"></div>
+                <div class="absolute inset-y-0 left-1/2 w-[1px] bg-slate-700/80"></div>
+              </div>
+
+            </div>
+
+            <!-- 松山新店線 綠色腰帶條紋 -->
+            <div class="w-full h-1.5 metro-stripe rounded-full my-0.5 shadow-sm"></div>
+
+            <!-- 車底裝備與車輪鋼軌接觸 -->
+            <div class="flex justify-between items-center px-1">
+              <div class="flex items-center space-x-1">
+                <div class="w-2.5 h-2.5 rounded-full bg-slate-900 border border-slate-500 flex items-center justify-center"><div class="w-1 h-1 bg-slate-400 rounded-full"></div></div>
+                <div class="w-2.5 h-2.5 rounded-full bg-slate-900 border border-slate-500 flex items-center justify-center"><div class="w-1 h-1 bg-slate-400 rounded-full"></div></div>
+              </div>
+
+              <div class="h-1 bg-slate-900 border border-slate-700 rounded px-1 text-[7px] text-emerald-400 font-mono">
+                TR300
+              </div>
+
+              <div class="flex items-center space-x-1">
+                <div class="w-2.5 h-2.5 rounded-full bg-slate-900 border border-slate-500 flex items-center justify-center"><div class="w-1 h-1 bg-slate-400 rounded-full"></div></div>
+                <div class="w-2.5 h-2.5 rounded-full bg-slate-900 border border-slate-500 flex items-center justify-center"><div class="w-1 h-1 bg-slate-400 rounded-full"></div></div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- 鐵軌 -->
+          <div class="w-full track-line mt-1 rounded-sm"></div>
+
+          <!-- 站名 -->
+          <div class="mt-1 text-center">
+            <span class="text-xs font-bold text-slate-200 block truncate max-w-[100px]">${stationObj.name}</span>
+          </div>
+        `;
+
+        if (isInteractive) {
+          carWrapper.querySelector('.h-28').addEventListener('click', () => placeCard(idx));
+        }
+
+        gridContainer.appendChild(carWrapper);
+      });
+    }
+
+    // 擺放卡牌至車廂
+    function placeCard(index) {
+      if (!isDrawing || board[index] !== null) return;
+
+      board[index] = currentDrawnCard;
+      currentDrawnCard = null;
+      isDrawing = false;
+
+      playTone(783.99, 'sine', 0.2); // G5 Sound
+
+      cardInner.classList.remove("flipped");
+
+      const filled = board.filter(v => v !== null).length;
+      if (filled < STATIONS.length) {
+        drawBtn.disabled = false;
+        drawBtn.innerHTML = `<i class="fa-solid fa-hand-pointer"></i> 抽取號碼牌`;
+        document.getElementById("actionHint").textContent = "請點擊上方卡匣或按鈕抽牌";
+      } else {
+        drawBtn.disabled = true;
+        drawBtn.innerHTML = `<i class="fa-solid fa-flag-checkered"></i> 全線完工`;
+        document.getElementById("actionHint").textContent = "🎉 松山新店線 20 站通車完成！";
+      }
+
+      renderBoard();
+      updateScoreAndSegments();
+
+      if (filled === STATIONS.length) {
+        const total = calculateTotalScore();
+        document.getElementById("finalScore").textContent = total;
+        document.getElementById("gameOverBanner").classList.remove("hidden");
+        playTone(880, 'sine', 0.4);
+
+        // 自動上傳成績並打開排行榜
+        submitScoreToLeaderboard(total);
+        setTimeout(() => {
+          toggleLeaderboardModal(true);
+        }, 1200);
+      }
+    }
+
+    // 計算連續非遞減列車段
+    function calculateSegments() {
+      const segments = [];
+      let currentSeg = null;
+
+      for (let i = 0; i < STATIONS.length; i++) {
+        const val = board[i];
+        if (val === null) {
+          if (currentSeg) { segments.push(currentSeg); currentSeg = null; }
+          continue;
+        }
+
+        if (!currentSeg) {
+          currentSeg = { values: [val], indices: [i] };
+        } else {
+          const lastVal = currentSeg.values[currentSeg.values.length - 1];
+          if (val >= lastVal) {
+            currentSeg.values.push(val);
+            currentSeg.indices.push(i);
+          } else {
+            segments.push(currentSeg);
+            currentSeg = { values: [val], indices: [i] };
+          }
+        }
+      }
+      if (currentSeg) segments.push(currentSeg);
+      return segments;
+    }
+
+    function calculateTotalScore() {
+      const segments = calculateSegments();
+      return segments.reduce((sum, seg) => sum + (SCORE_TABLE[seg.values.length] || 0), 0);
+    }
+
+    function updateScoreAndSegments() {
+      const segments = calculateSegments();
+      const totalScore = calculateTotalScore();
+      document.getElementById("totalScore").innerHTML = `${totalScore} <span class="text-sm font-normal text-slate-400">分</span>`;
+
+      const listContainer = document.getElementById("segmentList");
+      listContainer.innerHTML = "";
+
+      if (segments.length === 0) {
+        listContainer.innerHTML = `<p class="text-center text-slate-500 text-xs py-4">點擊抽牌並放置數字後，將在此呈現結算段落...</p>`;
+        return;
+      }
+
+      segments.forEach((seg, idx) => {
+        const score = SCORE_TABLE[seg.values.length] || 0;
+        const segItem = document.createElement("div");
+        segItem.className = "flex items-center justify-between bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/60 text-xs";
+
+        const startStation = STATIONS[seg.indices[0]].name;
+        const endStation = STATIONS[seg.indices[seg.indices.length - 1]].name;
+        const stationRange = seg.values.length > 1 ? `${startStation} ➔ ${endStation}` : startStation;
+
+        segItem.innerHTML = `
+          <div class="flex items-center gap-2 overflow-hidden">
+            <span class="badge-seg-${idx % 8} text-[10px] font-black px-2 py-0.5 rounded-full shrink-0">
+              段落 ${idx + 1}
+            </span>
+            <span class="font-bold text-slate-200 truncate">${stationRange}</span>
+            <span class="text-slate-400 text-[11px] shrink-0">([${seg.values.join(', ')}])</span>
+          </div>
+          <div class="flex items-center gap-2 shrink-0 ml-2">
+            <span class="text-slate-400 font-medium">${seg.values.length} 站</span>
+            <span class="font-black text-amber-400 text-sm">+${score} 分</span>
+          </div>
+        `;
+        listContainer.appendChild(segItem);
+      });
+    }
+
+    function resetGame() {
+      initGame();
+    }
+
+    window.onload = function() {
+      const input = document.getElementById("playerNameInput");
+      if (input) input.value = playerName;
+      initGame();
+      initFirebaseLeaderboard();
+    };
+  </script>
+</body>
+</html>
